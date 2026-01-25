@@ -11,6 +11,17 @@ from app.services.model_generator import generate_frame_model
 bp = Blueprint('pictures', __name__)
 
 
+@bp.before_request
+def log_request():
+    """Debug: Log all requests to this blueprint."""
+    print(f"=== Pictures Blueprint Request ===")
+    print(f"Method: {request.method}")
+    print(f"Path: {request.path}")
+    print(f"Headers: {dict(request.headers)}")
+    auth = request.headers.get('Authorization', 'NONE')
+    print(f"Auth header: {auth[:50]}..." if len(auth) > 50 else f"Auth header: {auth}")
+
+
 def allowed_file(filename):
     """Check if file extension is allowed."""
     allowed = current_app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'gif', 'webp'})
@@ -21,7 +32,7 @@ def allowed_file(filename):
 @jwt_required()
 def get_pictures():
     """Get all pictures for the current user."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     pictures = Picture.query.filter_by(user_id=user_id).order_by(Picture.created_at.desc()).all()
 
     return jsonify({
@@ -33,7 +44,7 @@ def get_pictures():
 @jwt_required()
 def get_picture(picture_id):
     """Get a specific picture by ID."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
@@ -46,58 +57,74 @@ def get_picture(picture_id):
 @jwt_required()
 def create_picture():
     """Create a new picture from uploaded image."""
-    user_id = get_jwt_identity()
+    print("=== create_picture called ===")
+    try:
+        user_id = int(get_jwt_identity())
+        print(f"User ID from JWT: {user_id}")
 
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
 
-    file = request.files['image']
+        file = request.files['image']
 
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
 
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'File type not allowed'}), 400
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'File type not allowed'}), 400
 
-    # Get form data
-    name = request.form.get('name', 'Untitled Picture')
-    description = request.form.get('description', '')
+        # Get form data
+        name = request.form.get('name', 'Untitled Picture')
+        description = request.form.get('description', '')
 
-    # Save the image
-    filename = secure_filename(file.filename)
-    upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'frames')
-    unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_{filename}"
-    file_path = os.path.join(upload_folder, unique_filename)
-    file.save(file_path)
+        # Save the image
+        filename = secure_filename(file.filename)
+        if not filename:
+            filename = 'image.jpg'
+        upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'frames')
 
-    # Process image and get dimensions
-    result = process_picture_image(file_path, upload_folder)
+        # Ensure upload folder exists
+        os.makedirs(upload_folder, exist_ok=True)
 
-    # Create picture record
-    picture = Picture(
-        user_id=user_id,
-        name=name,
-        description=description,
-        image_path=f"frames/{unique_filename}",
-        thumbnail_path=f"frames/{os.path.basename(result['thumbnail_path'])}" if result.get('thumbnail_path') else None,
-        width_px=result.get('width'),
-        height_px=result.get('height')
-    )
+        unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_{filename}"
+        file_path = os.path.join(upload_folder, unique_filename)
+        file.save(file_path)
 
-    db.session.add(picture)
-    db.session.commit()
+        # Process image and get dimensions
+        result = process_picture_image(file_path, upload_folder)
 
-    return jsonify({
-        'message': 'Picture created successfully',
-        'picture': picture.to_dict()
-    }), 201
+        # Create picture record
+        picture = Picture(
+            user_id=user_id,
+            name=name,
+            description=description,
+            image_path=f"frames/{unique_filename}",
+            thumbnail_path=f"frames/{os.path.basename(result['thumbnail_path'])}" if result.get('thumbnail_path') else None,
+            width_px=result.get('width'),
+            height_px=result.get('height')
+        )
+
+        db.session.add(picture)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Picture created successfully',
+            'picture': picture.to_dict()
+        }), 201
+
+    except Exception as e:
+        import traceback
+        print(f"Error creating picture: {e}")
+        print(traceback.format_exc())
+        db.session.rollback()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
 @bp.route('/<int:picture_id>', methods=['PUT'])
 @jwt_required()
 def update_picture(picture_id):
     """Update a picture's details."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
@@ -122,7 +149,7 @@ def update_picture(picture_id):
 @jwt_required()
 def delete_picture(picture_id):
     """Delete a picture and all associated frames."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
@@ -159,68 +186,78 @@ def delete_picture(picture_id):
 @jwt_required()
 def create_frame(picture_id):
     """Create a 3D frame for a picture with specified dimensions."""
-    user_id = get_jwt_identity()
-    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+    try:
+        user_id = int(get_jwt_identity())
+        picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
 
-    if not picture:
-        return jsonify({'error': 'Picture not found'}), 404
+        if not picture:
+            return jsonify({'error': 'Picture not found'}), 404
 
-    data = request.get_json()
+        data = request.get_json()
 
-    # Validate dimensions
-    unit = data.get('unit', 'inches')
-    width = data.get('width')
-    height = data.get('height')
-    depth = data.get('depth', 1.0 if unit == 'inches' else 2.54)
+        # Validate dimensions
+        unit = data.get('unit', 'inches')
+        width = data.get('width')
+        height = data.get('height')
+        depth = data.get('depth', 1.0 if unit == 'inches' else 2.54)
 
-    if not all([width, height]):
-        return jsonify({'error': 'Width and height are required'}), 400
+        if not all([width, height]):
+            return jsonify({'error': 'Width and height are required'}), 400
 
-    # Create frame
-    frame = PictureFrame(
-        picture_id=picture.id,
-        name=data.get('name', f'Frame {picture.frames.count() + 1}'),
-        frame_color=data.get('frame_color', '#8B4513'),
-        frame_material=data.get('frame_material', 'wood'),
-        mat_width_inches=data.get('mat_width', 0),
-        mat_color=data.get('mat_color', '#FFFFFF')
-    )
+        # Create frame
+        frame = PictureFrame(
+            picture_id=picture.id,
+            name=data.get('name', f'Frame {picture.frames.count() + 1}'),
+            frame_color=data.get('frame_color', '#8B4513'),
+            frame_material=data.get('frame_material', 'wood'),
+            mat_width_inches=data.get('mat_width', 0),
+            mat_color=data.get('mat_color', '#FFFFFF')
+        )
 
-    if unit == 'cm':
-        frame.set_dimensions_cm(width, height, depth)
-    else:
-        frame.set_dimensions_inches(width, height, depth)
+        if unit == 'cm':
+            frame.set_dimensions_cm(width, height, depth)
+        else:
+            frame.set_dimensions_inches(width, height, depth)
 
-    db.session.add(frame)
-    db.session.flush()  # Get the ID
+        db.session.add(frame)
+        db.session.flush()  # Get the ID
 
-    # Generate 3D model
-    models_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'models')
-    model_path = generate_frame_model(
-        frame_id=frame.id,
-        width_cm=frame.width_cm,
-        height_cm=frame.height_cm,
-        depth_cm=frame.depth_cm,
-        output_folder=models_folder,
-        picture_path=os.path.join(current_app.config['UPLOAD_FOLDER'], picture.image_path)
-    )
+        # Generate 3D model
+        models_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'models')
+        os.makedirs(models_folder, exist_ok=True)
 
-    if model_path:
-        frame.model_path = f"models/{os.path.basename(model_path)}"
+        model_path = generate_frame_model(
+            frame_id=frame.id,
+            width_cm=frame.width_cm,
+            height_cm=frame.height_cm,
+            depth_cm=frame.depth_cm,
+            output_folder=models_folder,
+            picture_path=os.path.join(current_app.config['UPLOAD_FOLDER'], picture.image_path)
+        )
 
-    db.session.commit()
+        if model_path:
+            frame.model_path = f"models/{os.path.basename(model_path)}"
 
-    return jsonify({
-        'message': 'Frame created successfully',
-        'frame': frame.to_dict()
-    }), 201
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Frame created successfully',
+            'frame': frame.to_dict()
+        }), 201
+
+    except Exception as e:
+        import traceback
+        print(f"Error creating frame: {e}")
+        print(traceback.format_exc())
+        db.session.rollback()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
 @bp.route('/<int:picture_id>/frames/<int:frame_id>', methods=['DELETE'])
 @jwt_required()
 def delete_frame(picture_id, frame_id):
     """Delete a frame."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:

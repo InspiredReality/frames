@@ -4,7 +4,7 @@ import { ref, computed, watch } from 'vue'
 const props = defineProps({
   modelValue: {
     type: Object,
-    default: () => ({ width: '', height: '', depth: 1, unit: 'inches' })
+    default: () => ({ width: '', height: '', depth: 1, unit: 'inches', orientation: 'portrait' })
   }
 })
 
@@ -47,56 +47,104 @@ const toggleUnit = () => {
   updateValue()
 }
 
-const commonSizes = computed(() => {
+const toggleOrientation = () => {
+  // Swap width and height
+  const temp = localValue.value.width
+  localValue.value.width = localValue.value.height
+  localValue.value.height = temp
+  localValue.value.orientation = localValue.value.orientation === 'portrait' ? 'landscape' : 'portrait'
+  updateValue()
+}
+
+const isPortrait = computed(() => {
+  const w = parseFloat(localValue.value.width) || 0
+  const h = parseFloat(localValue.value.height) || 0
+  return h >= w
+})
+
+// Base sizes (always stored as portrait - smaller dimension first)
+const baseSizes = computed(() => {
   if (localValue.value.unit === 'inches') {
     return [
-      { label: '4x6', width: 4, height: 6 },
-      { label: '5x7', width: 5, height: 7 },
-      { label: '8x10', width: 8, height: 10 },
-      { label: '11x14', width: 11, height: 14 },
-      { label: '16x20', width: 16, height: 20 },
-      { label: '24x36', width: 24, height: 36 },
+      { label: '4x6', small: 4, large: 6 },
+      { label: '5x7', small: 5, large: 7 },
+      { label: '8x10', small: 8, large: 10 },
+      { label: '11x14', small: 11, large: 14 },
+      { label: '16x20', small: 16, large: 20 },
+      { label: '24x36', small: 24, large: 36 },
     ]
   } else {
     return [
-      { label: '10x15', width: 10, height: 15 },
-      { label: '13x18', width: 13, height: 18 },
-      { label: '20x25', width: 20, height: 25 },
-      { label: '28x36', width: 28, height: 36 },
-      { label: '40x50', width: 40, height: 50 },
-      { label: '60x90', width: 60, height: 90 },
+      { label: '10x15', small: 10, large: 15 },
+      { label: '13x18', small: 13, large: 18 },
+      { label: '20x25', small: 20, large: 25 },
+      { label: '28x36', small: 28, large: 36 },
+      { label: '40x50', small: 40, large: 50 },
+      { label: '60x90', small: 60, large: 90 },
     ]
   }
 })
 
 const selectSize = (size) => {
-  localValue.value.width = size.width
-  localValue.value.height = size.height
+  // Apply based on current orientation
+  if (isPortrait.value) {
+    localValue.value.width = size.small
+    localValue.value.height = size.large
+  } else {
+    localValue.value.width = size.large
+    localValue.value.height = size.small
+  }
   updateValue()
+}
+
+const isSizeSelected = (size) => {
+  const w = parseFloat(localValue.value.width) || 0
+  const h = parseFloat(localValue.value.height) || 0
+  return (w === size.small && h === size.large) || (w === size.large && h === size.small)
 }
 </script>
 
 <template>
   <div class="space-y-4">
-    <!-- Unit toggle -->
-    <div class="flex items-center justify-between">
+    <!-- Unit and Orientation toggles -->
+    <div class="flex items-center justify-between gap-2">
       <span class="text-sm text-gray-400">Dimensions</span>
-      <button
-        @click="toggleUnit"
-        class="px-3 py-1 text-sm bg-dark-300 rounded-full hover:bg-dark-100 transition"
-      >
-        {{ localValue.unit === 'inches' ? 'Switch to cm' : 'Switch to inches' }}
-      </button>
+      <div class="flex gap-2">
+        <!-- Orientation toggle -->
+        <button
+          @click="toggleOrientation"
+          class="flex items-center gap-1 px-3 py-1 text-sm bg-dark-300 rounded-full hover:bg-dark-100 transition"
+          :title="isPortrait ? 'Switch to Landscape' : 'Switch to Portrait'"
+        >
+          <svg
+            class="w-4 h-4 transition-transform"
+            :class="{ 'rotate-90': !isPortrait }"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <rect x="5" y="3" width="14" height="18" rx="2" stroke-width="2"/>
+          </svg>
+          <span>{{ isPortrait ? 'Portrait' : 'Landscape' }}</span>
+        </button>
+        <!-- Unit toggle -->
+        <button
+          @click="toggleUnit"
+          class="px-3 py-1 text-sm bg-dark-300 rounded-full hover:bg-dark-100 transition"
+        >
+          {{ localValue.unit === 'inches' ? 'Switch to cm' : 'Switch to inches' }}
+        </button>
+      </div>
     </div>
 
     <!-- Common sizes -->
     <div class="flex flex-wrap gap-2">
       <button
-        v-for="size in commonSizes"
+        v-for="size in baseSizes"
         :key="size.label"
         @click="selectSize(size)"
         class="px-3 py-1 text-sm bg-dark-300 rounded-lg hover:bg-primary-600 transition"
-        :class="{ 'bg-primary-600': localValue.width == size.width && localValue.height == size.height }"
+        :class="{ 'bg-primary-600': isSizeSelected(size) }"
       >
         {{ size.label }}
       </button>

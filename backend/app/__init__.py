@@ -1,6 +1,6 @@
 """Flask application factory."""
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -22,6 +22,27 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+
+    # JWT error handlers for debugging
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error_string):
+        print(f"JWT Invalid token: {error_string}")
+        return jsonify({'error': f'Invalid token: {error_string}'}), 401
+
+    @jwt.unauthorized_loader
+    def unauthorized_callback(error_string):
+        print(f"JWT Unauthorized: {error_string}")
+        return jsonify({'error': f'Missing token: {error_string}'}), 401
+
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        print(f"JWT Expired: {jwt_payload}")
+        return jsonify({'error': 'Token has expired'}), 401
+
+    @jwt.token_verification_failed_loader
+    def token_verification_failed_callback(jwt_header, jwt_payload):
+        print(f"JWT Verification failed: {jwt_payload}")
+        return jsonify({'error': 'Token verification failed'}), 401
 
     # Configure CORS
     CORS(app, resources={
@@ -50,5 +71,18 @@ def create_app(config_class=Config):
     @app.route('/api/health')
     def health_check():
         return {'status': 'healthy', 'message': 'Frames API is running'}
+
+    # Debug endpoint to test JWT
+    @app.route('/api/debug/token')
+    def debug_token():
+        from flask import request
+        auth_header = request.headers.get('Authorization', 'Not provided')
+        print(f"Auth header: {auth_header}")
+        return {'auth_header': auth_header[:50] + '...' if len(auth_header) > 50 else auth_header}
+
+    # Create database tables (for development)
+    with app.app_context():
+        from . import models  # Import models to register them
+        db.create_all()
 
     return app

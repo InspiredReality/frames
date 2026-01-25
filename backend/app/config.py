@@ -25,8 +25,9 @@ class Config:
         seconds=int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 3600))
     )
 
-    # File Upload
-    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
+    # File Upload - use absolute path
+    BASE_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, os.environ.get('UPLOAD_FOLDER', 'uploads'))
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
