@@ -1,0 +1,95 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Flask
+instance/
+.webassets-cache
+*.db
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vue / Vite
+frontend/dist/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Uploads (keep folder structure)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Unity builds (these can be large)
+frontend/public/unity/*.data
+frontend/public/unity/*.data.gz
+frontend/public/unity/*.wasm
+frontend/public/unity/*.wasm.gz
+frontend/public/unity/*.framework.js
+frontend/public/unity/*.framework.js.gz
+
+# Keep Unity folder but not builds
+!frontend/public/unity/
+frontend/public/unity/*
+!frontend/public/unity/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Docker
+.docker/
+
+# Misc
+*.bak
+*.tmp
+*.temp

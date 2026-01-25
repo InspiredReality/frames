@@ -1,0 +1,244 @@
+"""Picture routes for managing captured artwork images."""
+import os
+from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from werkzeug.utils import secure_filename
+from app import db
+from app.models import Picture, PictureFrame
+from app.services.image_processor import process_picture_image
+from app.services.model_generator import generate_frame_model
+
+bp = Blueprint('pictures', __name__)
+
+
+def allowed_file(filename):
+    """Check if file extension is allowed."""
+    allowed = current_app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'gif', 'webp'})
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
+
+
+@bp.route('', methods=['GET'])
+@jwt_required()
+def get_pictures():
+    """Get all pictures for the current user."""
+    user_id = get_jwt_identity()
+    pictures = Picture.query.filter_by(user_id=user_id).order_by(Picture.created_at.desc()).all()
+
+    return jsonify({
+        'pictures': [p.to_dict(include_frames=True) for p in pictures]
+    }), 200
+
+
+@bp.route('/<int:picture_id>', methods=['GET'])
+@jwt_required()
+def get_picture(picture_id):
+    """Get a specific picture by ID."""
+    user_id = get_jwt_identity()
+    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+
+    if not picture:
+        return jsonify({'error': 'Picture not found'}), 404
+
+    return jsonify({'picture': picture.to_dict(include_frames=True)}), 200
+
+
+@bp.route('', methods=['POST'])
+@jwt_required()
+def create_picture():
+    """Create a new picture from uploaded image."""
+    user_id = get_jwt_identity()
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+
+    file = request.files['image']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'File type not allowed'}), 400
+
+    # Get form data
+    name = request.form.get('name', 'Untitled Picture')
+    description = request.form.get('description', '')
+
+    # Save the image
+    filename = secure_filename(file.filename)
+    upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'frames')
+    unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_{filename}"
+    file_path = os.path.join(upload_folder, unique_filename)
+    file.save(file_path)
+
+    # Process image and get dimensions
+    result = process_picture_image(file_path, upload_folder)
+
+    # Create picture record
+    picture = Picture(
+        user_id=user_id,
+        name=name,
+        description=description,
+        image_path=f"frames/{unique_filename}",
+        thumbnail_path=f"frames/{os.path.basename(result['thumbnail_path'])}" if result.get('thumbnail_path') else None,
+        width_px=result.get('width'),
+        height_px=result.get('height')
+    )
+
+    db.session.add(picture)
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Picture created successfully',
+        'picture': picture.to_dict()
+    }), 201
+
+
+@bp.route('/<int:picture_id>', methods=['PUT'])
+@jwt_required()
+def update_picture(picture_id):
+    """Update a picture's details."""
+    user_id = get_jwt_identity()
+    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+
+    if not picture:
+        return jsonify({'error': 'Picture not found'}), 404
+
+    data = request.get_json()
+
+    if 'name' in data:
+        picture.name = data['name']
+    if 'description' in data:
+        picture.description = data['description']
+
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Picture updated',
+        'picture': picture.to_dict()
+    }), 200
+
+
+@bp.route('/<int:picture_id>', methods=['DELETE'])
+@jwt_required()
+def delete_picture(picture_id):
+    """Delete a picture and all associated frames."""
+    user_id = get_jwt_identity()
+    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+
+    if not picture:
+        return jsonify({'error': 'Picture not found'}), 404
+
+    # Delete associated files
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    if picture.image_path:
+        try:
+            os.remove(os.path.join(upload_folder, picture.image_path))
+        except OSError:
+            pass
+    if picture.thumbnail_path:
+        try:
+            os.remove(os.path.join(upload_folder, picture.thumbnail_path))
+        except OSError:
+            pass
+
+    # Delete frame models
+    for frame in picture.frames:
+        if frame.model_path:
+            try:
+                os.remove(os.path.join(upload_folder, frame.model_path))
+            except OSError:
+                pass
+
+    db.session.delete(picture)
+    db.session.commit()
+
+    return jsonify({'message': 'Picture deleted'}), 200
+
+
+@bp.route('/<int:picture_id>/frames', methods=['POST'])
+@jwt_required()
+def create_frame(picture_id):
+    """Create a 3D frame for a picture with specified dimensions."""
+    user_id = get_jwt_identity()
+    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+
+    if not picture:
+        return jsonify({'error': 'Picture not found'}), 404
+
+    data = request.get_json()
+
+    # Validate dimensions
+    unit = data.get('unit', 'inches')
+    width = data.get('width')
+    height = data.get('height')
+    depth = data.get('depth', 1.0 if unit == 'inches' else 2.54)
+
+    if not all([width, height]):
+        return jsonify({'error': 'Width and height are required'}), 400
+
+    # Create frame
+    frame = PictureFrame(
+        picture_id=picture.id,
+        name=data.get('name', f'Frame {picture.frames.count() + 1}'),
+        frame_color=data.get('frame_color', '#8B4513'),
+        frame_material=data.get('frame_material', 'wood'),
+        mat_width_inches=data.get('mat_width', 0),
+        mat_color=data.get('mat_color', '#FFFFFF')
+    )
+
+    if unit == 'cm':
+        frame.set_dimensions_cm(width, height, depth)
+    else:
+        frame.set_dimensions_inches(width, height, depth)
+
+    db.session.add(frame)
+    db.session.flush()  # Get the ID
+
+    # Generate 3D model
+    models_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'models')
+    model_path = generate_frame_model(
+        frame_id=frame.id,
+        width_cm=frame.width_cm,
+        height_cm=frame.height_cm,
+        depth_cm=frame.depth_cm,
+        output_folder=models_folder,
+        picture_path=os.path.join(current_app.config['UPLOAD_FOLDER'], picture.image_path)
+    )
+
+    if model_path:
+        frame.model_path = f"models/{os.path.basename(model_path)}"
+
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Frame created successfully',
+        'frame': frame.to_dict()
+    }), 201
+
+
+@bp.route('/<int:picture_id>/frames/<int:frame_id>', methods=['DELETE'])
+@jwt_required()
+def delete_frame(picture_id, frame_id):
+    """Delete a frame."""
+    user_id = get_jwt_identity()
+    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+
+    if not picture:
+        return jsonify({'error': 'Picture not found'}), 404
+
+    frame = PictureFrame.query.filter_by(id=frame_id, picture_id=picture_id).first()
+
+    if not frame:
+        return jsonify({'error': 'Frame not found'}), 404
+
+    # Delete model file
+    if frame.model_path:
+        try:
+            os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], frame.model_path))
+        except OSError:
+            pass
+
+    db.session.delete(frame)
+    db.session.commit()
+
+    return jsonify({'message': 'Frame deleted'}), 200
