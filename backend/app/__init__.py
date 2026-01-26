@@ -45,11 +45,17 @@ def create_app(config_class=Config):
         return jsonify({'error': 'Token verification failed'}), 401
 
     # Configure CORS
+    cors_origins = app.config.get('CORS_ORIGINS', '*')
+    # Handle both comma-separated string and wildcard
+    allowed_origins = cors_origins.split(',') if cors_origins != '*' else '*'
+
     CORS(app, resources={
         r"/api/*": {
-            "origins": app.config.get('CORS_ORIGINS', '*').split(','),
+            "origins": allowed_origins,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+            "expose_headers": ["Content-Type", "Authorization"]
         }
     })
 

@@ -175,6 +175,54 @@ npm run lint
 
 ## Deployment
 
+### Vercel (Frontend)
+
+The frontend can be easily deployed to Vercel:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/frames)
+
+For detailed instructions, see [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md)
+
+**Quick Start:**
+1. Push your code to GitHub/GitLab/Bitbucket
+2. Import the project in [Vercel Dashboard](https://vercel.com/new)
+3. Set environment variable: `VITE_API_URL=https://your-backend-api.com/api`
+4. Deploy!
+
+**Note**: The backend needs to be deployed separately (see Backend Deployment below).
+
+### Railway (Backend) - Recommended
+
+Deploy the Flask backend to Railway with PostgreSQL:
+
+**Why Railway?**
+✅ Built-in PostgreSQL database
+✅ File upload storage included
+✅ No code changes required
+✅ ~$3-5/month (with database)
+
+For detailed instructions, see [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)
+
+**Quick Start:**
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Deploy
+cd backend
+railway login
+railway init
+railway add --database postgresql
+railway up
+```
+
+**Platform Comparison**: See [PLATFORM_COMPARISON.md](PLATFORM_COMPARISON.md) for why Railway is better than Vercel Functions for this backend.
+
+**Alternative Platforms:**
+- **Render**: [render.com](https://render.com/)
+- **Heroku**: [heroku.com](https://heroku.com/)
+- **DigitalOcean App Platform**: [digitalocean.com](https://www.digitalocean.com/products/app-platform)
+
 ### Production Build
 
 1. **Frontend**:
