@@ -20,7 +20,7 @@ def allowed_file(filename):
 @jwt_required()
 def get_walls():
     """Get all walls for the current user."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     walls = Wall.query.filter_by(user_id=user_id).order_by(Wall.created_at.desc()).all()
 
     return jsonify({
@@ -32,7 +32,7 @@ def get_walls():
 @jwt_required()
 def get_wall(wall_id):
     """Get a specific wall by ID."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
@@ -45,7 +45,7 @@ def get_wall(wall_id):
 @jwt_required()
 def create_wall():
     """Create a new wall from uploaded image."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
 
     if 'image' not in request.files:
         return jsonify({'error': 'No image file provided'}), 400
@@ -100,7 +100,7 @@ def create_wall():
 @jwt_required()
 def update_wall(wall_id):
     """Update a wall's details or frame placements."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
@@ -133,7 +133,7 @@ def update_wall(wall_id):
 @jwt_required()
 def delete_wall(wall_id):
     """Delete a wall."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
@@ -162,7 +162,7 @@ def delete_wall(wall_id):
 @jwt_required()
 def add_frame_placement(wall_id):
     """Add a frame placement to a wall."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:

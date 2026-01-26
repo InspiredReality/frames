@@ -79,7 +79,7 @@ def login():
 @jwt_required()
 def get_current_user():
     """Get current authenticated user."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
 
     if not user:
@@ -92,7 +92,7 @@ def get_current_user():
 @jwt_required()
 def update_current_user():
     """Update current user's profile."""
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
 
     if not user:
