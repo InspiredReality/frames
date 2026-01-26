@@ -1,0 +1,34 @@
+# Development files
+.env.example
+.env
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation
+README.md
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Tests
+tests/
+test_*.py

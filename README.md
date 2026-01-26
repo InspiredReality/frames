@@ -191,10 +191,34 @@ For detailed instructions, see [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md)
 
 **Note**: The backend needs to be deployed separately (see Backend Deployment below).
 
-### Backend Deployment
+### Railway (Backend) - Recommended
 
-Deploy the Flask backend to a Python-compatible platform:
-- **Railway** (recommended): [railway.app](https://railway.app/)
+Deploy the Flask backend to Railway with PostgreSQL:
+
+**Why Railway?**
+✅ Built-in PostgreSQL database
+✅ File upload storage included
+✅ No code changes required
+✅ ~$3-5/month (with database)
+
+For detailed instructions, see [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)
+
+**Quick Start:**
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Deploy
+cd backend
+railway login
+railway init
+railway add --database postgresql
+railway up
+```
+
+**Platform Comparison**: See [PLATFORM_COMPARISON.md](PLATFORM_COMPARISON.md) for why Railway is better than Vercel Functions for this backend.
+
+**Alternative Platforms:**
 - **Render**: [render.com](https://render.com/)
 - **Heroku**: [heroku.com](https://heroku.com/)
 - **DigitalOcean App Platform**: [digitalocean.com](https://www.digitalocean.com/products/app-platform)
