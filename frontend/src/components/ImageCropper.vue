@@ -9,6 +9,10 @@ const props = defineProps({
   aspectRatio: {
     type: Number,
     default: null // null = free aspect ratio
+  },
+  orientation: {
+    type: String,
+    default: 'portrait' // 'portrait' or 'landscape'
   }
 })
 
@@ -277,10 +281,51 @@ const resetCrop = () => {
   emitCrop()
 }
 
+// Flip crop box 90 degrees (swap width/height while maintaining center and area)
+const flipOrientation = () => {
+  if (!imageDimensions.value.width) return
+
+  const { x, y, width, height } = cropBox.value
+  const centerX = x + width / 2
+  const centerY = y + height / 2
+
+  // Swap width and height
+  let newWidth = height
+  let newHeight = width
+
+  // Calculate new position to keep center
+  let newX = centerX - newWidth / 2
+  let newY = centerY - newHeight / 2
+
+  // Constrain to bounds
+  if (newX < 0) newX = 0
+  if (newY < 0) newY = 0
+  if (newX + newWidth > 100) {
+    newX = Math.max(0, 100 - newWidth)
+    if (newX + newWidth > 100) newWidth = 100 - newX
+  }
+  if (newY + newHeight > 100) {
+    newY = Math.max(0, 100 - newHeight)
+    if (newY + newHeight > 100) newHeight = 100 - newY
+  }
+
+  cropBox.value = { x: newX, y: newY, width: newWidth, height: newHeight }
+  emitCrop()
+}
+
 watch(() => props.aspectRatio, () => {
   if (props.aspectRatio) {
     adjustToAspectRatio()
     emitCrop()
+  }
+})
+
+// Watch for orientation changes and flip the crop box
+let lastOrientation = props.orientation
+watch(() => props.orientation, (newOrientation) => {
+  if (newOrientation !== lastOrientation) {
+    flipOrientation()
+    lastOrientation = newOrientation
   }
 })
 
@@ -298,7 +343,7 @@ onUnmounted(() => {
   document.removeEventListener('touchend', onMouseUp)
 })
 
-defineExpose({ resetCrop, emitCrop })
+defineExpose({ resetCrop, emitCrop, flipOrientation })
 </script>
 
 <template>

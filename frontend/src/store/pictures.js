@@ -22,11 +22,14 @@ export const usePicturesStore = defineStore('pictures', () => {
     }
   }
 
-  async function uploadPicture(file, name, description = '') {
+  async function uploadPicture(file, name, description = '', wallId = null) {
     const formData = new FormData()
     formData.append('image', file)
     formData.append('name', name)
     formData.append('description', description)
+    if (wallId) {
+      formData.append('wall_id', wallId)
+    }
 
     const response = await api.post('/pictures', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -34,6 +37,26 @@ export const usePicturesStore = defineStore('pictures', () => {
 
     pictures.value.unshift(response.data.picture)
     return response.data.picture
+  }
+
+  async function updatePicture(pictureId, updates) {
+    const response = await api.put(`/pictures/${pictureId}`, updates)
+
+    // Update local state
+    const index = pictures.value.findIndex(p => p.id === pictureId)
+    if (index !== -1) {
+      pictures.value[index] = response.data.picture
+    }
+
+    return response.data.picture
+  }
+
+  // Get frames by wall ID
+  function getFramesByWall(wallId) {
+    if (!wallId) {
+      return pictures.value.filter(p => !p.wall_id)
+    }
+    return pictures.value.filter(p => p.wall_id === wallId)
   }
 
   async function createFrame(pictureId, dimensions) {
@@ -64,8 +87,10 @@ export const usePicturesStore = defineStore('pictures', () => {
     error,
     fetchPictures,
     uploadPicture,
+    updatePicture,
     createFrame,
     deletePicture,
-    getPictureById
+    getPictureById,
+    getFramesByWall
   }
 })

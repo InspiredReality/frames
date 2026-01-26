@@ -48,18 +48,23 @@ const toggleUnit = () => {
 }
 
 const toggleOrientation = () => {
-  // Swap width and height
-  const temp = localValue.value.width
-  localValue.value.width = localValue.value.height
-  localValue.value.height = temp
-  localValue.value.orientation = localValue.value.orientation === 'portrait' ? 'landscape' : 'portrait'
+  // Toggle orientation state
+  const newOrientation = localValue.value.orientation === 'portrait' ? 'landscape' : 'portrait'
+  localValue.value.orientation = newOrientation
+
+  // Swap width and height if they exist
+  if (localValue.value.width || localValue.value.height) {
+    const temp = localValue.value.width
+    localValue.value.width = localValue.value.height
+    localValue.value.height = temp
+  }
+
   updateValue()
 }
 
 const isPortrait = computed(() => {
-  const w = parseFloat(localValue.value.width) || 0
-  const h = parseFloat(localValue.value.height) || 0
-  return h >= w
+  // Use explicit orientation state, not just dimension comparison
+  return localValue.value.orientation === 'portrait'
 })
 
 // Base sizes (always stored as portrait - smaller dimension first)
@@ -86,8 +91,8 @@ const baseSizes = computed(() => {
 })
 
 const selectSize = (size) => {
-  // Apply based on current orientation
-  if (isPortrait.value) {
+  // Apply based on current orientation state
+  if (localValue.value.orientation === 'portrait') {
     localValue.value.width = size.small
     localValue.value.height = size.large
   } else {

@@ -10,6 +10,7 @@ class Picture(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    wall_id = db.Column(db.Integer, db.ForeignKey('walls.id'), nullable=True, index=True)  # Optional wall assignment
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
 
@@ -32,6 +33,7 @@ class Picture(db.Model):
         data = {
             'id': self.id,
             'user_id': self.user_id,
+            'wall_id': self.wall_id,
             'name': self.name,
             'description': self.description,
             'image_path': self.image_path,

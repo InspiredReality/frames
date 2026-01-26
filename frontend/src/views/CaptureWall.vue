@@ -11,10 +11,68 @@ const step = ref(1) // 1: capture, 2: details
 const capturedImage = ref(null)
 const wallName = ref('')
 const wallDescription = ref('')
-const widthCm = ref('')
-const heightCm = ref('')
+const wallWidth = ref('')
+const wallHeight = ref('')
+const wallUnit = ref('feet') // 'feet', 'inches', or 'cm'
 const loading = ref(false)
 const error = ref('')
+
+// Conversion constants
+const INCHES_PER_FOOT = 12
+const CM_PER_INCH = 2.54
+
+const unitLabels = {
+  feet: 'ft',
+  inches: 'in',
+  cm: 'cm'
+}
+
+const unitPlaceholders = {
+  feet: { width: 'e.g., 10', height: 'e.g., 8' },
+  inches: { width: 'e.g., 120', height: 'e.g., 96' },
+  cm: { width: 'e.g., 300', height: 'e.g., 250' }
+}
+
+const toggleUnit = () => {
+  const units = ['feet', 'inches', 'cm']
+  const currentIndex = units.indexOf(wallUnit.value)
+  const newUnit = units[(currentIndex + 1) % units.length]
+
+  // Convert existing values
+  if (wallWidth.value) {
+    wallWidth.value = convertDimension(parseFloat(wallWidth.value), wallUnit.value, newUnit)
+  }
+  if (wallHeight.value) {
+    wallHeight.value = convertDimension(parseFloat(wallHeight.value), wallUnit.value, newUnit)
+  }
+
+  wallUnit.value = newUnit
+}
+
+const convertDimension = (value, fromUnit, toUnit) => {
+  if (!value) return ''
+
+  // First convert to cm
+  let cm = value
+  if (fromUnit === 'feet') cm = value * INCHES_PER_FOOT * CM_PER_INCH
+  else if (fromUnit === 'inches') cm = value * CM_PER_INCH
+
+  // Then convert from cm to target unit
+  let result = cm
+  if (toUnit === 'feet') result = cm / (INCHES_PER_FOOT * CM_PER_INCH)
+  else if (toUnit === 'inches') result = cm / CM_PER_INCH
+
+  return result.toFixed(toUnit === 'feet' ? 2 : toUnit === 'inches' ? 1 : 0)
+}
+
+const getDimensionInCm = (value) => {
+  if (!value) return null
+  const num = parseFloat(value)
+  if (wallUnit.value === 'cm') return num
+  if (wallUnit.value === 'inches') return num * CM_PER_INCH
+  if (wallUnit.value === 'feet') return num * INCHES_PER_FOOT * CM_PER_INCH
+  return num
+}
 
 const onCapture = (data) => {
   capturedImage.value = data
@@ -44,11 +102,11 @@ const saveWall = async () => {
     const file = new File([capturedImage.value.blob], 'wall.jpg', { type: 'image/jpeg' })
 
     await wallsStore.uploadWall(file, wallName.value, wallDescription.value, {
-      width_cm: widthCm.value ? parseFloat(widthCm.value) : null,
-      height_cm: heightCm.value ? parseFloat(heightCm.value) : null
+      width_cm: getDimensionInCm(wallWidth.value),
+      height_cm: getDimensionInCm(wallHeight.value)
     })
 
-    router.push('/walls')
+    router.push('/gallery')
   } catch (err) {
     error.value = err.response?.data?.error || 'Failed to save wall'
   } finally {
@@ -127,26 +185,39 @@ const saveWall = async () => {
           ></textarea>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Wall Width (cm, optional)</label>
-            <input
-              v-model="widthCm"
-              type="number"
-              step="1"
-              min="0"
-              placeholder="e.g., 300"
-            />
+        <!-- Wall Dimensions with Unit Toggle -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-400">Wall Dimensions (optional)</span>
+            <button
+              @click="toggleUnit"
+              class="px-3 py-1 text-sm bg-dark-300 rounded-full hover:bg-dark-100 transition"
+            >
+              Switch to {{ wallUnit === 'feet' ? 'inches' : wallUnit === 'inches' ? 'cm' : 'feet' }}
+            </button>
           </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Wall Height (cm, optional)</label>
-            <input
-              v-model="heightCm"
-              type="number"
-              step="1"
-              min="0"
-              placeholder="e.g., 250"
-            />
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Width ({{ unitLabels[wallUnit] }})</label>
+              <input
+                v-model="wallWidth"
+                type="number"
+                :step="wallUnit === 'feet' ? '0.5' : '1'"
+                min="0"
+                :placeholder="unitPlaceholders[wallUnit].width"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Height ({{ unitLabels[wallUnit] }})</label>
+              <input
+                v-model="wallHeight"
+                type="number"
+                :step="wallUnit === 'feet' ? '0.5' : '1'"
+                min="0"
+                :placeholder="unitPlaceholders[wallUnit].height"
+              />
+            </div>
           </div>
         </div>
 

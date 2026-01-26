@@ -31,14 +31,14 @@ def get_walls():
 @bp.route('/<int:wall_id>', methods=['GET'])
 @jwt_required()
 def get_wall(wall_id):
-    """Get a specific wall by ID."""
+    """Get a specific wall by ID with its assigned frames."""
     user_id = int(get_jwt_identity())
     wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
         return jsonify({'error': 'Wall not found'}), 404
 
-    return jsonify({'wall': wall.to_dict()}), 200
+    return jsonify({'wall': wall.to_dict(include_frames=True)}), 200
 
 
 @bp.route('', methods=['POST'])
@@ -172,6 +172,7 @@ def add_frame_placement(wall_id):
 
     placement = {
         'frame_id': data.get('frame_id'),
+        'picture_id': data.get('picture_id'),
         'position': data.get('position', {'x': 0, 'y': 0, 'z': 0}),
         'rotation': data.get('rotation', {'x': 0, 'y': 0, 'z': 0}),
         'scale': data.get('scale', 1.0)

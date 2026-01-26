@@ -182,9 +182,9 @@ const getImageUrl = (path) => getUploadUrl(path)
         </div>
 
         <div v-if="allFrames.length === 0" class="text-center py-6">
-          <p class="text-gray-400 mb-4">No frames available. Create some pictures first.</p>
+          <p class="text-gray-400 mb-4">No frames available. Add some frames first.</p>
           <router-link to="/capture/frame" class="btn btn-primary">
-            Capture Frame
+            Add Frame
           </router-link>
         </div>
 

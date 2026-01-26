@@ -74,8 +74,9 @@ def create_picture():
             return jsonify({'error': 'File type not allowed'}), 400
 
         # Get form data
-        name = request.form.get('name', 'Untitled Picture')
+        name = request.form.get('name', 'Untitled Frame')
         description = request.form.get('description', '')
+        wall_id = request.form.get('wall_id', type=int)  # Optional wall assignment
 
         # Save the image
         filename = secure_filename(file.filename)
@@ -96,6 +97,7 @@ def create_picture():
         # Create picture record
         picture = Picture(
             user_id=user_id,
+            wall_id=wall_id,
             name=name,
             description=description,
             image_path=f"frames/{unique_filename}",
@@ -136,6 +138,8 @@ def update_picture(picture_id):
         picture.name = data['name']
     if 'description' in data:
         picture.description = data['description']
+    if 'wall_id' in data:
+        picture.wall_id = data['wall_id']  # Can be None to unassign
 
     db.session.commit()
 
