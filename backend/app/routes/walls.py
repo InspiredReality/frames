@@ -1,8 +1,10 @@
 """Wall routes for managing virtual walls."""
 import os
+from PIL import Image as PILImage
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
+from sqlalchemy.orm.attributes import flag_modified
 from app import db
 from app.models import Wall
 from app.services.image_processor import process_wall_image
@@ -24,7 +26,7 @@ def get_walls():
     walls = Wall.query.filter_by(user_id=user_id).order_by(Wall.created_at.desc()).all()
 
     return jsonify({
-        'walls': [w.to_dict(include_placements=False) for w in walls]
+        'walls': [w.to_dict(include_placements=True) for w in walls]
     }), 200
 
 
@@ -44,43 +46,63 @@ def get_wall(wall_id):
 @bp.route('', methods=['POST'])
 @jwt_required()
 def create_wall():
-    """Create a new wall from uploaded image."""
+    """Create a new wall from uploaded image or solid color."""
     user_id = int(get_jwt_identity())
-
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
-
-    file = request.files['image']
-
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'File type not allowed'}), 400
 
     # Get form data
     name = request.form.get('name', 'Untitled Wall')
     description = request.form.get('description', '')
     width_cm = request.form.get('width_cm', type=float)
     height_cm = request.form.get('height_cm', type=float)
+    background_color = request.form.get('background_color')
 
-    # Save the image
-    filename = secure_filename(file.filename)
+    image_path_val = None
+    thumbnail_path_val = None
     upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'walls')
-    unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_{filename}"
-    file_path = os.path.join(upload_folder, unique_filename)
-    file.save(file_path)
+    os.makedirs(upload_folder, exist_ok=True)
 
-    # Process image and create thumbnail
-    thumbnail_path = process_wall_image(file_path, upload_folder)
+    if 'image' in request.files and request.files['image'].filename != '':
+        file = request.files['image']
+
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'File type not allowed'}), 400
+
+        # Save the image
+        filename = secure_filename(file.filename)
+        unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_{filename}"
+        file_path = os.path.join(upload_folder, unique_filename)
+        file.save(file_path)
+
+        # Process image and create thumbnail
+        thumbnail_path = process_wall_image(file_path, upload_folder)
+
+        image_path_val = f"walls/{unique_filename}"
+        thumbnail_path_val = f"walls/{os.path.basename(thumbnail_path)}" if thumbnail_path else None
+    elif background_color:
+        # Generate a solid-color image for the wall
+        hex_color = background_color.lstrip('#')
+        rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        img = PILImage.new('RGB', (1920, 1080), rgb)
+        unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_color_wall.jpg"
+        file_path = os.path.join(upload_folder, unique_filename)
+        img.save(file_path, 'JPEG', quality=90)
+
+        # Process image and create thumbnail
+        thumbnail_path = process_wall_image(file_path, upload_folder)
+
+        image_path_val = f"walls/{unique_filename}"
+        thumbnail_path_val = f"walls/{os.path.basename(thumbnail_path)}" if thumbnail_path else None
+    else:
+        return jsonify({'error': 'Either an image or a background color is required'}), 400
 
     # Create wall record
     wall = Wall(
         user_id=user_id,
         name=name,
         description=description,
-        image_path=f"walls/{unique_filename}",
-        thumbnail_path=f"walls/{os.path.basename(thumbnail_path)}" if thumbnail_path else None,
+        image_path=image_path_val,
+        thumbnail_path=thumbnail_path_val,
+        background_color=background_color,
         width_cm=width_cm,
         height_cm=height_cm,
         scene_config={},
@@ -116,6 +138,8 @@ def update_wall(wall_id):
         wall.width_cm = data['width_cm']
     if 'height_cm' in data:
         wall.height_cm = data['height_cm']
+    if 'background_color' in data:
+        wall.background_color = data['background_color']
     if 'scene_config' in data:
         wall.scene_config = data['scene_config']
     if 'frame_placements' in data:
@@ -178,9 +202,10 @@ def add_frame_placement(wall_id):
         'scale': data.get('scale', 1.0)
     }
 
-    placements = wall.frame_placements or []
+    placements = list(wall.frame_placements or [])
     placements.append(placement)
     wall.frame_placements = placements
+    flag_modified(wall, 'frame_placements')
 
     db.session.commit()
 

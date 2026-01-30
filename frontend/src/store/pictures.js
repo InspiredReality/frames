@@ -72,6 +72,21 @@ export const usePicturesStore = defineStore('pictures', () => {
     return response.data.frame
   }
 
+  async function updateFrame(pictureId, frameId, updates) {
+    const response = await api.put(`/pictures/${pictureId}/frames/${frameId}`, updates)
+
+    // Update local state
+    const picture = pictures.value.find(p => p.id === pictureId)
+    if (picture && picture.frames) {
+      const frameIndex = picture.frames.findIndex(f => f.id === frameId)
+      if (frameIndex !== -1) {
+        picture.frames[frameIndex] = response.data.frame
+      }
+    }
+
+    return response.data.frame
+  }
+
   async function deletePicture(pictureId) {
     await api.delete(`/pictures/${pictureId}`)
     pictures.value = pictures.value.filter(p => p.id !== pictureId)
@@ -89,6 +104,7 @@ export const usePicturesStore = defineStore('pictures', () => {
     uploadPicture,
     updatePicture,
     createFrame,
+    updateFrame,
     deletePicture,
     getPictureById,
     getFramesByWall

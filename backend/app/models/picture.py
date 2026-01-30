@@ -16,6 +16,7 @@ class Picture(db.Model):
 
     # Image paths
     image_path = db.Column(db.String(500), nullable=False)
+    original_image_path = db.Column(db.String(500))  # Preserved original from capture
     thumbnail_path = db.Column(db.String(500))
 
     # Original image dimensions (pixels)
@@ -37,6 +38,7 @@ class Picture(db.Model):
             'name': self.name,
             'description': self.description,
             'image_path': self.image_path,
+            'original_image_path': self.original_image_path,
             'thumbnail_path': self.thumbnail_path,
             'width_px': self.width_px,
             'height_px': self.height_px,

@@ -7,7 +7,7 @@ import { useWallsStore } from '@/store/walls'
 const router = useRouter()
 const wallsStore = useWallsStore()
 
-const step = ref(1) // 1: capture, 2: details
+const step = ref(1) // 1: capture/choose, 2: details
 const capturedImage = ref(null)
 const wallName = ref('')
 const wallDescription = ref('')
@@ -16,6 +16,20 @@ const wallHeight = ref('')
 const wallUnit = ref('feet') // 'feet', 'inches', or 'cm'
 const loading = ref(false)
 const error = ref('')
+
+// Blank color wall state
+const useBlankColor = ref(false)
+const wallColor = ref('#e0e0e0')
+const showCustomWallColor = ref(false)
+
+const wallColorPresets = [
+  { label: 'White', value: '#FFFFFF' },
+  { label: 'Off-White', value: '#F5F5DC' },
+  { label: 'Light Gray', value: '#D3D3D3' },
+  { label: 'Gray', value: '#808080' },
+  { label: 'Black', value: '#000000' },
+  { label: 'Brown', value: '#8B4513' }
+]
 
 // Conversion constants
 const INCHES_PER_FOOT = 12
@@ -76,6 +90,7 @@ const getDimensionInCm = (value) => {
 
 const onCapture = (data) => {
   capturedImage.value = data
+  useBlankColor.value = false
   step.value = 2
 }
 
@@ -83,8 +98,15 @@ const onCameraError = (message) => {
   error.value = message
 }
 
+const selectBlankColor = () => {
+  useBlankColor.value = true
+  capturedImage.value = null
+  step.value = 2
+}
+
 const retake = () => {
   capturedImage.value = null
+  useBlankColor.value = false
   step.value = 1
   error.value = ''
 }
@@ -99,12 +121,19 @@ const saveWall = async () => {
   error.value = ''
 
   try {
-    const file = new File([capturedImage.value.blob], 'wall.jpg', { type: 'image/jpeg' })
+    let file = null
+    let bgColor = null
+
+    if (useBlankColor.value) {
+      bgColor = wallColor.value
+    } else {
+      file = new File([capturedImage.value.blob], 'wall.jpg', { type: 'image/jpeg' })
+    }
 
     await wallsStore.uploadWall(file, wallName.value, wallDescription.value, {
       width_cm: getDimensionInCm(wallWidth.value),
       height_cm: getDimensionInCm(wallHeight.value)
-    })
+    }, bgColor)
 
     router.push('/gallery')
   } catch (err) {
@@ -143,13 +172,28 @@ const saveWall = async () => {
       {{ error }}
     </div>
 
-    <!-- Step 1: Camera Capture -->
+    <!-- Step 1: Camera Capture or Blank Color -->
     <div v-if="step === 1">
       <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Wall</h2>
       <p class="text-gray-400 text-center mb-6">
-        Take a photo of the wall where you want to place your pictures
+        Take a photo of the wall or use a blank color background
       </p>
+
       <CameraCapture @capture="onCapture" @error="onCameraError" />
+
+      <div class="mt-6 text-center">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="flex-1 h-px bg-gray-600"></div>
+          <span class="text-gray-400 text-sm">or</span>
+          <div class="flex-1 h-px bg-gray-600"></div>
+        </div>
+        <button
+          @click="selectBlankColor"
+          class="btn btn-secondary w-full"
+        >
+          Use Blank Color Background
+        </button>
+      </div>
     </div>
 
     <!-- Step 2: Wall Details -->
@@ -157,12 +201,58 @@ const saveWall = async () => {
       <h2 class="text-2xl font-bold mb-4">Wall Details</h2>
 
       <!-- Preview of captured image -->
-      <div class="mb-6">
+      <div v-if="!useBlankColor" class="mb-6">
         <img
           :src="capturedImage.dataUrl"
           alt="Captured wall"
           class="w-full max-h-64 object-contain rounded-lg bg-dark-300"
         />
+      </div>
+
+      <!-- Color preview for blank walls -->
+      <div v-else class="mb-6">
+        <div
+          class="w-full h-40 rounded-lg border border-gray-600"
+          :style="{ backgroundColor: wallColor }"
+        ></div>
+
+        <!-- Color selection -->
+        <div class="mt-3">
+          <label class="block text-sm text-gray-400 mb-2">Wall Color</label>
+          <div class="flex gap-2 flex-wrap">
+            <button
+              v-for="preset in wallColorPresets"
+              :key="preset.value"
+              @click="wallColor = preset.value; showCustomWallColor = false"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+              :class="wallColor === preset.value && !showCustomWallColor ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500"
+                :style="{ backgroundColor: preset.value }"
+              ></span>
+              <span class="text-sm">{{ preset.label }}</span>
+            </button>
+            <button
+              @click="showCustomWallColor = !showCustomWallColor"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+              :class="showCustomWallColor ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500"
+                :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
+              ></span>
+              <span class="text-sm">Custom</span>
+            </button>
+          </div>
+          <div v-if="showCustomWallColor" class="mt-2">
+            <input
+              type="color"
+              v-model="wallColor"
+              class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
+            />
+          </div>
+        </div>
       </div>
 
       <div class="space-y-4">
@@ -228,7 +318,7 @@ const saveWall = async () => {
 
       <div class="flex gap-4 mt-6">
         <button @click="retake" class="btn btn-secondary flex-1">
-          Retake Photo
+          {{ useBlankColor ? 'Go Back' : 'Retake Photo' }}
         </button>
         <button
           @click="saveWall"

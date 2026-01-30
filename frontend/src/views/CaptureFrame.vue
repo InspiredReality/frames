@@ -19,8 +19,17 @@ const croppedImage = ref(null)
 const dimensions = ref({ width: '', height: '', depth: 1, unit: 'inches', orientation: 'portrait' })
 const pictureName = ref('')
 const selectedWallId = ref(null)
+const frameColor = ref('#000000')
+const frameThickness = ref(1)
+const showColorPicker = ref(false)
 const loading = ref(false)
 const error = ref('')
+
+const presetColors = [
+  { label: 'Black', value: '#000000' },
+  { label: 'White', value: '#FFFFFF' },
+  { label: 'Brown', value: '#8B4513' }
+]
 
 const cameraRef = ref(null)
 const cropperRef = ref(null)
@@ -96,13 +105,25 @@ const savePicture = async () => {
     const file = new File([croppedImage.value.blob], 'frame.jpg', { type: 'image/jpeg' })
     const picture = await picturesStore.uploadPicture(file, pictureName.value, '', selectedWallId.value)
 
-    // Create the frame with dimensions
-    await picturesStore.createFrame(picture.id, {
+    // Create the frame with dimensions and styling
+    const frame = await picturesStore.createFrame(picture.id, {
       width: parseFloat(dimensions.value.width),
       height: parseFloat(dimensions.value.height),
       depth: parseFloat(dimensions.value.depth) || 1,
-      unit: dimensions.value.unit
+      unit: dimensions.value.unit,
+      frame_color: frameColor.value,
+      frame_thickness: frameThickness.value
     })
+
+    // If a wall was selected, also add a frame placement to that wall
+    if (selectedWallId.value && frame?.id) {
+      await wallsStore.addFramePlacement(selectedWallId.value, {
+        frame_id: frame.id,
+        position: { x: 0, y: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: 1.0
+      })
+    }
 
     router.push('/gallery')
   } catch (err) {
@@ -180,12 +201,24 @@ const savePicture = async () => {
           />
         </div>
 
-        <!-- Right Column: Cropped Preview + Dimensions -->
+        <!-- Right Column: Dimensions + Cropped Preview -->
         <div class="space-y-4">
-          <!-- Cropped Preview -->
+          <!-- Dimensions Input -->
           <div class="card">
             <h3 class="font-semibold mb-3 flex items-center gap-2">
               <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">2</span>
+              Frame Dimensions
+            </h3>
+            <p class="text-sm text-gray-400 mb-4">
+              Enter the real-world size of your picture frame
+            </p>
+            <DimensionInput v-model="dimensions" />
+          </div>
+
+          <!-- Cropped Preview -->
+          <div class="card">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">3</span>
               Cropped Result
             </h3>
             <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center">
@@ -200,18 +233,6 @@ const savePicture = async () => {
             <div v-if="croppedImage" class="mt-2 text-xs text-gray-500 text-center">
               {{ croppedImage.width }} x {{ croppedImage.height }} pixels
             </div>
-          </div>
-
-          <!-- Dimensions Input -->
-          <div class="card">
-            <h3 class="font-semibold mb-3 flex items-center gap-2">
-              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">3</span>
-              Frame Dimensions
-            </h3>
-            <p class="text-sm text-gray-400 mb-4">
-              Enter the real-world size of your picture frame
-            </p>
-            <DimensionInput v-model="dimensions" />
           </div>
 
           <!-- Wall Selection (Optional) -->
@@ -292,6 +313,8 @@ const savePicture = async () => {
                 height: parseFloat(dimensions.height) || 8,
                 depth: parseFloat(dimensions.depth) || 1
               }"
+              :frameColor="frameColor"
+              :frameThickness="frameThickness"
             />
           </div>
         </div>
@@ -308,6 +331,57 @@ const savePicture = async () => {
             type="text"
             placeholder="e.g., Living Room Art, Family Photo"
           />
+        </div>
+
+        <!-- Frame Thickness -->
+        <div class="mb-6">
+          <label class="block text-sm text-gray-400 mb-1">Frame Thickness (inches)</label>
+          <input
+            v-model.number="frameThickness"
+            type="number"
+            min="0.25"
+            max="5"
+            step="0.25"
+            class="w-full"
+          />
+        </div>
+
+        <!-- Frame Color -->
+        <div class="mb-6">
+          <label class="block text-sm text-gray-400 mb-2">Frame Color</label>
+          <div class="flex gap-2 flex-wrap">
+            <button
+              v-for="preset in presetColors"
+              :key="preset.value"
+              @click="frameColor = preset.value; showColorPicker = false"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+              :class="frameColor === preset.value && !showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500"
+                :style="{ backgroundColor: preset.value }"
+              ></span>
+              <span class="text-sm">{{ preset.label }}</span>
+            </button>
+            <button
+              @click="showColorPicker = !showColorPicker"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+              :class="showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500"
+                :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
+              ></span>
+              <span class="text-sm">Custom</span>
+            </button>
+          </div>
+          <div v-if="showColorPicker" class="mt-2">
+            <input
+              type="color"
+              v-model="frameColor"
+              class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
+            />
+          </div>
         </div>
 
         <!-- Summary -->

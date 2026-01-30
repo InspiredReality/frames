@@ -37,13 +37,16 @@ export const useWallsStore = defineStore('walls', () => {
     }
   }
 
-  async function uploadWall(file, name, description = '', dimensions = {}) {
+  async function uploadWall(file, name, description = '', dimensions = {}, backgroundColor = null) {
     const formData = new FormData()
-    formData.append('image', file)
+    if (file) {
+      formData.append('image', file)
+    }
     formData.append('name', name)
     formData.append('description', description)
     if (dimensions.width_cm) formData.append('width_cm', dimensions.width_cm)
     if (dimensions.height_cm) formData.append('height_cm', dimensions.height_cm)
+    if (backgroundColor) formData.append('background_color', backgroundColor)
 
     const response = await api.post('/walls', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }

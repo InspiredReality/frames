@@ -13,9 +13,10 @@ class Wall(db.Model):
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
 
-    # Wall image
-    image_path = db.Column(db.String(500), nullable=False)
+    # Wall image (nullable for color-only walls)
+    image_path = db.Column(db.String(500), nullable=True)
     thumbnail_path = db.Column(db.String(500))
+    background_color = db.Column(db.String(7))  # Hex color e.g. '#FFFFFF'
 
     # Wall dimensions (estimated or user-provided)
     width_cm = db.Column(db.Float)
@@ -42,6 +43,7 @@ class Wall(db.Model):
             'description': self.description,
             'image_path': self.image_path,
             'thumbnail_path': self.thumbnail_path,
+            'background_color': self.background_color,
             'width_cm': self.width_cm,
             'height_cm': self.height_cm,
             'scene_config': self.scene_config,

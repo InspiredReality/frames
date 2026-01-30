@@ -94,13 +94,14 @@ def create_picture():
         # Process image and get dimensions
         result = process_picture_image(file_path, upload_folder)
 
-        # Create picture record
+        # Create picture record (original_image_path preserves the initial capture)
         picture = Picture(
             user_id=user_id,
             wall_id=wall_id,
             name=name,
             description=description,
             image_path=f"frames/{unique_filename}",
+            original_image_path=f"frames/{unique_filename}",
             thumbnail_path=f"frames/{os.path.basename(result['thumbnail_path'])}" if result.get('thumbnail_path') else None,
             width_px=result.get('width'),
             height_px=result.get('height')
@@ -147,6 +148,69 @@ def update_picture(picture_id):
         'message': 'Picture updated',
         'picture': picture.to_dict()
     }), 200
+
+
+@bp.route('/<int:picture_id>/image', methods=['PUT'])
+@jwt_required()
+def update_picture_image(picture_id):
+    """Update a picture's image (for recrop functionality)."""
+    user_id = int(get_jwt_identity())
+    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+
+    if not picture:
+        return jsonify({'error': 'Picture not found'}), 404
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+
+    file = request.files['image']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    try:
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        frames_folder = os.path.join(upload_folder, 'frames')
+
+        # Delete old cropped image files (but never the original)
+        if picture.image_path and picture.image_path != picture.original_image_path:
+            old_image = os.path.join(upload_folder, picture.image_path)
+            if os.path.exists(old_image):
+                os.remove(old_image)
+        if picture.thumbnail_path:
+            old_thumb = os.path.join(upload_folder, picture.thumbnail_path)
+            if os.path.exists(old_thumb):
+                os.remove(old_thumb)
+
+        # Save new image
+        filename = secure_filename(file.filename) or 'recropped.jpg'
+        unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_{filename}"
+        file_path = os.path.join(frames_folder, unique_filename)
+        file.save(file_path)
+
+        # Process image and create new thumbnail
+        result = process_picture_image(file_path, frames_folder)
+
+        # Update picture record
+        picture.image_path = f"frames/{unique_filename}"
+        if result.get('thumbnail_path'):
+            picture.thumbnail_path = f"frames/{os.path.basename(result['thumbnail_path'])}"
+        picture.width_px = result.get('width')
+        picture.height_px = result.get('height')
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Image updated successfully',
+            'picture': picture.to_dict(include_frames=True)
+        }), 200
+
+    except Exception as e:
+        import traceback
+        print(f"Error updating picture image: {e}")
+        print(traceback.format_exc())
+        db.session.rollback()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
 @bp.route('/<int:picture_id>', methods=['DELETE'])
@@ -252,6 +316,62 @@ def create_frame(picture_id):
     except Exception as e:
         import traceback
         print(f"Error creating frame: {e}")
+        print(traceback.format_exc())
+        db.session.rollback()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@bp.route('/<int:picture_id>/frames/<int:frame_id>', methods=['PUT'])
+@jwt_required()
+def update_frame(picture_id, frame_id):
+    """Update a frame's dimensions."""
+    try:
+        user_id = int(get_jwt_identity())
+        picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+
+        if not picture:
+            return jsonify({'error': 'Picture not found'}), 404
+
+        frame = PictureFrame.query.filter_by(id=frame_id, picture_id=picture_id).first()
+
+        if not frame:
+            return jsonify({'error': 'Frame not found'}), 404
+
+        data = request.get_json()
+
+        # Update dimensions if provided
+        if 'width' in data and 'height' in data:
+            unit = data.get('unit', 'cm')
+            width = float(data['width'])
+            height = float(data['height'])
+
+            # Get depth with fallback defaults
+            if unit == 'cm':
+                depth = float(data.get('depth', frame.depth_cm if frame.depth_cm else 2.54))
+            else:
+                depth = float(data.get('depth', frame.depth_inches if frame.depth_inches else 1.0))
+
+            if unit == 'cm':
+                frame.set_dimensions_cm(width, height, depth)
+            else:
+                frame.set_dimensions_inches(width, height, depth)
+
+        # Update styling if provided
+        if 'frame_color' in data:
+            frame.frame_color = data['frame_color']
+        if 'frame_material' in data:
+            frame.frame_material = data['frame_material']
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Frame updated',
+            'frame': frame.to_dict()
+        }), 200
+
+    except Exception as e:
+        import traceback
+        print(f"Error updating frame: {e}")
         print(traceback.format_exc())
         db.session.rollback()
         return jsonify({'error': f'Server error: {str(e)}'}), 500

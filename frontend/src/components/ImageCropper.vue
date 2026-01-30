@@ -169,6 +169,13 @@ const startResize = (e, handle) => {
 const onMouseMove = (e) => {
   if (!isDragging.value && !isResizing.value) return
 
+  // Check if mouse button was released but we missed the mouseup event
+  // e.buttons === 0 means no buttons are currently pressed
+  if (!e.touches && e.buttons === 0) {
+    onMouseUp()
+    return
+  }
+
   const rect = containerRef.value.getBoundingClientRect()
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
@@ -264,15 +271,30 @@ const emitCrop = () => {
 
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
 
-  canvas.toBlob((blob) => {
+  try {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        emit('crop', {
+          blob,
+          dataUrl: canvas.toDataURL('image/jpeg', 0.9),
+          width: Math.round(sw),
+          height: Math.round(sh),
+          cropBox: { ...cropBox.value }
+        })
+      }
+    }, 'image/jpeg', 0.9)
+  } catch (err) {
+    // Canvas is tainted (cross-origin image without CORS)
+    // Emit crop data without blob - the parent can handle re-fetching if needed
+    console.warn('Canvas export failed (CORS):', err.message)
     emit('crop', {
-      blob,
-      dataUrl: canvas.toDataURL('image/jpeg', 0.9),
+      blob: null,
+      dataUrl: null,
       width: Math.round(sw),
       height: Math.round(sh),
       cropBox: { ...cropBox.value }
     })
-  }, 'image/jpeg', 0.9)
+  }
 }
 
 // Reset crop to full image
@@ -356,6 +378,7 @@ defineExpose({ resetCrop, emitCrop, flipOrientation })
         @load="onImageLoad"
         class="cropper-image"
         draggable="false"
+        crossorigin="anonymous"
       />
 
       <!-- Overlay masks -->
