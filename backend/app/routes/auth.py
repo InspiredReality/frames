@@ -87,12 +87,6 @@ def get_current_user():
 
     return jsonify({'user': user.to_dict()}), 200
 
-@bp.route('/health', methods=['GET'])
-def get_current_user():
-    """Get current authenticated user."""
-
-    return 200
-
 @bp.route('/me', methods=['PUT'])
 @jwt_required()
 def update_current_user():
