@@ -67,11 +67,15 @@ def create_app(config_class=Config):
     os.makedirs(os.path.join(upload_folder, 'models'), exist_ok=True)
 
     # Register blueprints
-    from .routes import auth, walls, pictures, models3d
-    app.register_blueprint(auth.bp, url_prefix='/api/auth')
-    app.register_blueprint(walls.bp, url_prefix='/api/walls')
-    app.register_blueprint(pictures.bp, url_prefix='/api/pictures')
-    app.register_blueprint(models3d.bp, url_prefix='/api/models')
+    from .routes.auth import bp as auth_bp
+    from .routes.walls import bp as walls_bp
+    from .routes.pictures import bp as pictures_bp
+    from .routes.models3d import bp as models3d_bp
+
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(walls_bp, url_prefix='/api/walls')
+    app.register_blueprint(pictures_bp, url_prefix='/api/pictures')
+    app.register_blueprint(models3d_bp, url_prefix='/api/models')
 
     # Root endpoint for basic connectivity test
     @app.route('/')
