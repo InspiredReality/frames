@@ -13,9 +13,10 @@ class Wall(db.Model):
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
 
-    # Wall image
-    image_path = db.Column(db.String(500), nullable=False)
+    # Wall image (nullable for color-only walls)
+    image_path = db.Column(db.String(500), nullable=True)
     thumbnail_path = db.Column(db.String(500))
+    background_color = db.Column(db.String(7))  # Hex color e.g. '#FFFFFF'
 
     # Wall dimensions (estimated or user-provided)
     width_cm = db.Column(db.Float)
@@ -24,13 +25,16 @@ class Wall(db.Model):
     # 3D scene configuration (JSON)
     scene_config = db.Column(db.JSON, default=dict)
 
-    # Placed frames configuration (JSON array of frame placements)
+    # Placed frames configuration (JSON array of frame placements for AR)
     frame_placements = db.Column(db.JSON, default=list)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    def to_dict(self, include_placements=True):
+    # Relationship to pictures/frames assigned to this wall
+    pictures = db.relationship('Picture', backref='wall', lazy='dynamic')
+
+    def to_dict(self, include_placements=True, include_frames=False):
         """Serialize wall to dictionary."""
         data = {
             'id': self.id,
@@ -39,14 +43,18 @@ class Wall(db.Model):
             'description': self.description,
             'image_path': self.image_path,
             'thumbnail_path': self.thumbnail_path,
+            'background_color': self.background_color,
             'width_cm': self.width_cm,
             'height_cm': self.height_cm,
             'scene_config': self.scene_config,
+            'frame_count': self.pictures.count(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
         if include_placements:
             data['frame_placements'] = self.frame_placements
+        if include_frames:
+            data['frames'] = [p.to_dict(include_frames=True) for p in self.pictures]
         return data
 
     def __repr__(self):

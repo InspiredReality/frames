@@ -1,6 +1,6 @@
 """3D model routes for serving and managing generated models."""
 import os
-from flask import Blueprint, send_from_directory, current_app, jsonify
+from flask import Blueprint, send_from_directory, current_app, jsonify, make_response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import PictureFrame, Picture
 
@@ -57,4 +57,8 @@ def get_model_info(frame_id):
 def serve_upload(filename):
     """Serve uploaded files (images, models, etc.)."""
     upload_folder = current_app.config['UPLOAD_FOLDER']
-    return send_from_directory(upload_folder, filename)
+    response = make_response(send_from_directory(upload_folder, filename))
+    # Add CORS headers for canvas/image operations
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Cross-Origin-Resource-Policy'] = 'cross-origin'
+    return response

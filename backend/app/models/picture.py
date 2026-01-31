@@ -10,11 +10,13 @@ class Picture(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    wall_id = db.Column(db.Integer, db.ForeignKey('walls.id'), nullable=True, index=True)  # Optional wall assignment
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
 
     # Image paths
     image_path = db.Column(db.String(500), nullable=False)
+    original_image_path = db.Column(db.String(500))  # Preserved original from capture
     thumbnail_path = db.Column(db.String(500))
 
     # Original image dimensions (pixels)
@@ -32,9 +34,11 @@ class Picture(db.Model):
         data = {
             'id': self.id,
             'user_id': self.user_id,
+            'wall_id': self.wall_id,
             'name': self.name,
             'description': self.description,
             'image_path': self.image_path,
+            'original_image_path': self.original_image_path,
             'thumbnail_path': self.thumbnail_path,
             'width_px': self.width_px,
             'height_px': self.height_px,

@@ -1,25 +1,43 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
 import DimensionInput from '@/components/DimensionInput.vue'
 import FramePreview from '@/components/FramePreview.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import { usePicturesStore } from '@/store/pictures'
+import { useWallsStore } from '@/store/walls'
+import { getUploadUrl } from '@/services/api'
 
 const router = useRouter()
 const picturesStore = usePicturesStore()
+const wallsStore = useWallsStore()
 
 const step = ref(1) // 1: capture, 2: crop & dimensions, 3: preview
 const capturedImage = ref(null)
 const croppedImage = ref(null)
 const dimensions = ref({ width: '', height: '', depth: 1, unit: 'inches', orientation: 'portrait' })
 const pictureName = ref('')
+const selectedWallId = ref(null)
+const frameColor = ref('#000000')
+const frameThickness = ref(1)
+const showColorPicker = ref(false)
 const loading = ref(false)
 const error = ref('')
 
+const presetColors = [
+  { label: 'Black', value: '#000000' },
+  { label: 'White', value: '#FFFFFF' },
+  { label: 'Brown', value: '#8B4513' }
+]
+
 const cameraRef = ref(null)
 const cropperRef = ref(null)
+
+// Fetch walls on mount
+onMounted(async () => {
+  await wallsStore.fetchWalls()
+})
 
 // Calculate aspect ratio from dimensions if both are set
 const aspectRatio = computed(() => {
@@ -28,6 +46,16 @@ const aspectRatio = computed(() => {
   }
   return null
 })
+
+// Get selected wall
+const selectedWall = computed(() => {
+  if (!selectedWallId.value) return null
+  return wallsStore.walls.find(w => w.id === selectedWallId.value)
+})
+
+const getWallImageUrl = (path) => {
+  return getUploadUrl(path)
+}
 
 const onCapture = (data) => {
   capturedImage.value = data
@@ -65,7 +93,7 @@ const goToPreview = () => {
 
 const savePicture = async () => {
   if (!pictureName.value.trim()) {
-    error.value = 'Please enter a name for your picture'
+    error.value = 'Please enter a name for your frame'
     return
   }
 
@@ -73,21 +101,33 @@ const savePicture = async () => {
   error.value = ''
 
   try {
-    // Upload the cropped picture
+    // Upload the cropped picture with optional wall assignment
     const file = new File([croppedImage.value.blob], 'frame.jpg', { type: 'image/jpeg' })
-    const picture = await picturesStore.uploadPicture(file, pictureName.value)
+    const picture = await picturesStore.uploadPicture(file, pictureName.value, '', selectedWallId.value)
 
-    // Create the frame with dimensions
-    await picturesStore.createFrame(picture.id, {
+    // Create the frame with dimensions and styling
+    const frame = await picturesStore.createFrame(picture.id, {
       width: parseFloat(dimensions.value.width),
       height: parseFloat(dimensions.value.height),
       depth: parseFloat(dimensions.value.depth) || 1,
-      unit: dimensions.value.unit
+      unit: dimensions.value.unit,
+      frame_color: frameColor.value,
+      frame_thickness: frameThickness.value
     })
+
+    // If a wall was selected, also add a frame placement to that wall
+    if (selectedWallId.value && frame?.id) {
+      await wallsStore.addFramePlacement(selectedWallId.value, {
+        frame_id: frame.id,
+        position: { x: 0, y: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: 1.0
+      })
+    }
 
     router.push('/gallery')
   } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to save picture'
+    error.value = err.response?.data?.error || 'Failed to save frame'
   } finally {
     loading.value = false
   }
@@ -131,9 +171,9 @@ const savePicture = async () => {
 
     <!-- Step 1: Camera Capture -->
     <div v-if="step === 1" class="max-w-2xl mx-auto">
-      <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Picture Frame</h2>
+      <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Frame</h2>
       <p class="text-gray-400 text-center mb-6">
-        Take a clear photo of the picture or artwork you want to frame
+        Take a clear photo of the artwork or picture you want to add
       </p>
       <CameraCapture ref="cameraRef" @capture="onCapture" @error="onCameraError" />
     </div>
@@ -143,29 +183,80 @@ const savePicture = async () => {
       <h2 class="text-2xl font-bold mb-6 text-center">Crop & Set Dimensions</h2>
 
       <div class="grid md:grid-cols-2 gap-6">
-        <!-- Left Column: Original Image with Crop Tool -->
-        <div class="card">
-          <h3 class="font-semibold mb-3 flex items-center gap-2">
-            <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">1</span>
-            Crop Your Image
-          </h3>
-          <p class="text-sm text-gray-400 mb-4">
-            Drag the corners or edges to select the area you want to keep
-          </p>
-          <ImageCropper
-            ref="cropperRef"
-            :imageUrl="capturedImage.dataUrl"
-            :aspectRatio="aspectRatio"
-            @crop="onCrop"
-          />
+        <!-- Left Column: Dimensions + Wall Selection -->
+        <div class="space-y-4">
+          <!-- Dimensions Input -->
+          <div class="card">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">1</span>
+              Frame Dimensions
+            </h3>
+            <p class="text-sm text-gray-400 mb-4">
+              Enter the real-world size of your picture frame
+            </p>
+            <DimensionInput v-model="dimensions" />
+          </div>
+
+          <!-- Wall Selection (Optional) -->
+          <div class="card" v-if="wallsStore.walls.length > 0">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <span class="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center text-xs">+</span>
+              Assign to Wall (Optional)
+            </h3>
+            <p class="text-sm text-gray-400 mb-3">
+              Select a wall to place this picture on
+            </p>
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                @click="selectedWallId = null"
+                class="aspect-video rounded-lg border-2 transition flex items-center justify-center text-sm"
+                :class="selectedWallId === null ? 'border-primary-500 bg-primary-500/10' : 'border-gray-600 hover:border-gray-500'"
+              >
+                None
+              </button>
+              <button
+                v-for="wall in wallsStore.walls"
+                :key="wall.id"
+                @click="selectedWallId = wall.id"
+                class="aspect-video rounded-lg border-2 overflow-hidden transition relative"
+                :class="selectedWallId === wall.id ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+              >
+                <img
+                  :src="getWallImageUrl(wall.thumbnail_path || wall.image_path)"
+                  :alt="wall.name"
+                  class="w-full h-full object-cover"
+                />
+                <div class="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                  <span class="text-xs truncate block">{{ wall.name }}</span>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- Right Column: Cropped Preview + Dimensions -->
+        <!-- Right Column: Crop Tool + Cropped Result -->
         <div class="space-y-4">
-          <!-- Cropped Preview -->
           <div class="card">
             <h3 class="font-semibold mb-3 flex items-center gap-2">
               <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">2</span>
+              Crop Your Image
+            </h3>
+            <p class="text-sm text-gray-400 mb-4">
+              Drag the corners or edges to select the area you want to keep
+            </p>
+            <ImageCropper
+              ref="cropperRef"
+              :imageUrl="capturedImage.dataUrl"
+              :aspectRatio="aspectRatio"
+              :orientation="dimensions.orientation"
+              @crop="onCrop"
+            />
+          </div>
+
+          <!-- Cropped Preview -->
+          <div class="card">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">3</span>
               Cropped Result
             </h3>
             <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center">
@@ -180,18 +271,6 @@ const savePicture = async () => {
             <div v-if="croppedImage" class="mt-2 text-xs text-gray-500 text-center">
               {{ croppedImage.width }} x {{ croppedImage.height }} pixels
             </div>
-          </div>
-
-          <!-- Dimensions Input -->
-          <div class="card">
-            <h3 class="font-semibold mb-3 flex items-center gap-2">
-              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">3</span>
-              Frame Dimensions
-            </h3>
-            <p class="text-sm text-gray-400 mb-4">
-              Enter the real-world size of your picture frame
-            </p>
-            <DimensionInput v-model="dimensions" />
           </div>
         </div>
       </div>
@@ -216,7 +295,7 @@ const savePicture = async () => {
         <div class="grid md:grid-cols-2 gap-4 mb-6">
           <!-- Cropped Image -->
           <div>
-            <h4 class="text-sm text-gray-400 mb-2">Your Picture</h4>
+            <h4 class="text-sm text-gray-400 mb-2">Your Image</h4>
             <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center">
               <img
                 :src="croppedImage.dataUrl"
@@ -236,6 +315,8 @@ const savePicture = async () => {
                 height: parseFloat(dimensions.height) || 8,
                 depth: parseFloat(dimensions.depth) || 1
               }"
+              :frameColor="frameColor"
+              :frameThickness="frameThickness"
             />
           </div>
         </div>
@@ -246,12 +327,63 @@ const savePicture = async () => {
 
         <!-- Name input -->
         <div class="mb-6">
-          <label class="block text-sm text-gray-400 mb-1">Picture Name</label>
+          <label class="block text-sm text-gray-400 mb-1">Frame Name</label>
           <input
             v-model="pictureName"
             type="text"
             placeholder="e.g., Living Room Art, Family Photo"
           />
+        </div>
+
+        <!-- Frame Thickness -->
+        <div class="mb-6">
+          <label class="block text-sm text-gray-400 mb-1">Frame Thickness (inches)</label>
+          <input
+            v-model.number="frameThickness"
+            type="number"
+            min="0.25"
+            max="5"
+            step="0.25"
+            class="w-full"
+          />
+        </div>
+
+        <!-- Frame Color -->
+        <div class="mb-6">
+          <label class="block text-sm text-gray-400 mb-2">Frame Color</label>
+          <div class="flex gap-2 flex-wrap">
+            <button
+              v-for="preset in presetColors"
+              :key="preset.value"
+              @click="frameColor = preset.value; showColorPicker = false"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+              :class="frameColor === preset.value && !showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500"
+                :style="{ backgroundColor: preset.value }"
+              ></span>
+              <span class="text-sm">{{ preset.label }}</span>
+            </button>
+            <button
+              @click="showColorPicker = !showColorPicker"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+              :class="showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500"
+                :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
+              ></span>
+              <span class="text-sm">Custom</span>
+            </button>
+          </div>
+          <div v-if="showColorPicker" class="mt-2">
+            <input
+              type="color"
+              v-model="frameColor"
+              class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
+            />
+          </div>
         </div>
 
         <!-- Summary -->
@@ -265,6 +397,9 @@ const savePicture = async () => {
           </p>
           <p class="text-gray-400 text-sm">
             Image: {{ croppedImage?.width }} x {{ croppedImage?.height }} px
+          </p>
+          <p v-if="selectedWall" class="text-gray-400 text-sm">
+            Wall: {{ selectedWall.name }}
           </p>
         </div>
 
