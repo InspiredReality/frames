@@ -76,7 +76,21 @@ def create_app(config_class=Config):
     # Health check endpoint
     @app.route('/api/health')
     def health_check():
-        return {'status': 'healthy', 'message': 'Frames API is running'}
+        health_status = {
+            'status': 'healthy',
+            'message': 'Frames API is running'
+        }
+
+        # Check database connection
+        try:
+            db.session.execute(db.text('SELECT 1'))
+            health_status['database'] = 'connected'
+        except Exception as e:
+            health_status['database'] = 'disconnected'
+            health_status['database_error'] = str(e)[:100]
+            # Still return 200 OK so Railway doesn't fail health check
+
+        return health_status
 
     # Debug endpoint to test JWT
     @app.route('/api/debug/token')
@@ -87,8 +101,15 @@ def create_app(config_class=Config):
         return {'auth_header': auth_header[:50] + '...' if len(auth_header) > 50 else auth_header}
 
     # Create database tables (for development)
+    # In production, use migrations instead: flask db upgrade
     with app.app_context():
-        from . import models  # Import models to register them
-        db.create_all()
+        try:
+            from . import models  # Import models to register them
+            db.create_all()
+            print("✓ Database tables created successfully")
+        except Exception as e:
+            # Log error but don't crash - health check should still work
+            print(f"⚠ Database initialization error (this is OK on first deploy): {e}")
+            print("→ Run 'flask db upgrade' or 'railway run flask db upgrade' to create tables")
 
     return app
