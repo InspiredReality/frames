@@ -183,56 +183,18 @@ const savePicture = async () => {
       <h2 class="text-2xl font-bold mb-6 text-center">Crop & Set Dimensions</h2>
 
       <div class="grid md:grid-cols-2 gap-6">
-        <!-- Left Column: Original Image with Crop Tool -->
-        <div class="card">
-          <h3 class="font-semibold mb-3 flex items-center gap-2">
-            <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">1</span>
-            Crop Your Image
-          </h3>
-          <p class="text-sm text-gray-400 mb-4">
-            Drag the corners or edges to select the area you want to keep
-          </p>
-          <ImageCropper
-            ref="cropperRef"
-            :imageUrl="capturedImage.dataUrl"
-            :aspectRatio="aspectRatio"
-            :orientation="dimensions.orientation"
-            @crop="onCrop"
-          />
-        </div>
-
-        <!-- Right Column: Dimensions + Cropped Preview -->
+        <!-- Left Column: Dimensions + Wall Selection -->
         <div class="space-y-4">
           <!-- Dimensions Input -->
           <div class="card">
             <h3 class="font-semibold mb-3 flex items-center gap-2">
-              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">2</span>
+              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">1</span>
               Frame Dimensions
             </h3>
             <p class="text-sm text-gray-400 mb-4">
               Enter the real-world size of your picture frame
             </p>
             <DimensionInput v-model="dimensions" />
-          </div>
-
-          <!-- Cropped Preview -->
-          <div class="card">
-            <h3 class="font-semibold mb-3 flex items-center gap-2">
-              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">3</span>
-              Cropped Result
-            </h3>
-            <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center">
-              <img
-                v-if="croppedImage?.dataUrl"
-                :src="croppedImage.dataUrl"
-                alt="Cropped preview"
-                class="max-w-full max-h-full object-contain"
-              />
-              <span v-else class="text-gray-500">Crop preview will appear here</span>
-            </div>
-            <div v-if="croppedImage" class="mt-2 text-xs text-gray-500 text-center">
-              {{ croppedImage.width }} x {{ croppedImage.height }} pixels
-            </div>
           </div>
 
           <!-- Wall Selection (Optional) -->
@@ -268,6 +230,46 @@ const savePicture = async () => {
                   <span class="text-xs truncate block">{{ wall.name }}</span>
                 </div>
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Crop Tool + Cropped Result -->
+        <div class="space-y-4">
+          <div class="card">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">2</span>
+              Crop Your Image
+            </h3>
+            <p class="text-sm text-gray-400 mb-4">
+              Drag the corners or edges to select the area you want to keep
+            </p>
+            <ImageCropper
+              ref="cropperRef"
+              :imageUrl="capturedImage.dataUrl"
+              :aspectRatio="aspectRatio"
+              :orientation="dimensions.orientation"
+              @crop="onCrop"
+            />
+          </div>
+
+          <!-- Cropped Preview -->
+          <div class="card">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <span class="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center text-xs">3</span>
+              Cropped Result
+            </h3>
+            <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center">
+              <img
+                v-if="croppedImage?.dataUrl"
+                :src="croppedImage.dataUrl"
+                alt="Cropped preview"
+                class="max-w-full max-h-full object-contain"
+              />
+              <span v-else class="text-gray-500">Crop preview will appear here</span>
+            </div>
+            <div v-if="croppedImage" class="mt-2 text-xs text-gray-500 text-center">
+              {{ croppedImage.width }} x {{ croppedImage.height }} pixels
             </div>
           </div>
         </div>
