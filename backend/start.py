@@ -12,14 +12,13 @@ def main():
     print(f"Starting Gunicorn on port {port}...")
 
     # Build gunicorn command
-    workers = os.environ.get('WEB_CONCURRENCY', '1')
     cmd = [
         'gunicorn',
-        'run:create_app()',
+        'run:app',
         '--bind', f'0.0.0.0:{port}',
-        '--workers', workers,
+        '--workers', '1',
+        '--threads', '2',
         '--timeout', '120',
-        '--preload',
         '--log-level', 'info',
         '--access-logfile', '-',
         '--error-logfile', '-'
