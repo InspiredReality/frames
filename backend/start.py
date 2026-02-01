@@ -26,7 +26,7 @@ def main():
     print(f"Command: {' '.join(cmd)}")
 
     # cmd
-    print(f"Executed")
+    print(f"Executed start")
 
     # Execute gunicorn
     try:
