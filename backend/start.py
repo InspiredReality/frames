@@ -25,12 +25,13 @@ def main():
 
     print(f"Command: {' '.join(cmd)}")
 
+    cmd
     # Execute gunicorn
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error starting Gunicorn: {e}", file=sys.stderr)
-        sys.exit(1)
+    # try:
+    #     subprocess.run(cmd, check=True)
+    # except subprocess.CalledProcessError as e:
+    #     print(f"Error starting Gunicorn: {e}", file=sys.stderr)
+    #     sys.exit(1)
 
 if __name__ == '__main__':
     main()
