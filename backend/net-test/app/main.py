@@ -2,8 +2,9 @@ import os
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 
-from .database import SessionLocal, engine
-from . import models, crud
+# import database
+from app.database import SessionLocal, engine
+from app import models, crud
 
 models.Base.metadata.create_all(bind=engine)
 
