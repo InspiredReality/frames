@@ -26,4 +26,4 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:${PORT}"]
+CMD ["gunicorn", "net-test.app.main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:5000"]
