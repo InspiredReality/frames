@@ -2,6 +2,6 @@
   "$schema": "https://railway.app/railway.schema.json",
   "deploy": {
     "healthcheckPath": "/healthcheck",
-    "startCommand": "python3 main.py"
+    "startCommand": "python3 ./app/main.py"
   }
 }
