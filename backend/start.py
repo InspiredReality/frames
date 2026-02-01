@@ -14,7 +14,7 @@ def main():
     # Build gunicorn command
     cmd = [
         'gunicorn',
-        'run:app',
+        'run:create_app()',
         '--bind', f'0.0.0.0:{port}',
         '--workers', '2',
         '--timeout', '120',
