@@ -128,12 +128,14 @@ def create_app(config_class=Config):
     except Exception as e:
         print(f"⚠ Error importing models: {e}")
 
-    # Create tables if they don't exist
-    with app.app_context():
-        try:
-            db.create_all()
-            print("✓ Database tables created/verified")
-        except Exception as e:
-            print(f"⚠ Database table creation failed: {e}")
+    # Only create tables in development; in production use migrations
+    # or create tables manually to avoid extra DB connections at startup
+    if os.environ.get('FLASK_ENV') != 'production':
+        with app.app_context():
+            try:
+                db.create_all()
+                print("✓ Database tables created/verified")
+            except Exception as e:
+                print(f"⚠ Database table creation failed: {e}")
 
     return app
