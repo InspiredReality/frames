@@ -4,6 +4,7 @@
     "buildCommand": "pip install -r requirements.txt"
   },
   "deploy": {
+    "startCommand": "python start.py",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
