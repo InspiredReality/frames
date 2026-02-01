@@ -2,29 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
+# Install deps first (better caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy your code
 COPY . .
 
-# # Create upload directories
-# RUN mkdir -p uploads/frames uploads/walls uploads/models
+# Ensure Python can import from /app
+ENV PYTHONPATH=/app
 
-# # Expose port
-# EXPOSE 5000
-
-# Run the application
-# CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "run:app"]
-
-ENV PYTHONUNBUFFERED=1
-
-CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:5000"]
-
+# Railway provides PORT
+CMD ["uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-5000}"]
