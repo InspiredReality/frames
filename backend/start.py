@@ -16,7 +16,7 @@ def main():
         'gunicorn',
         'run:app',
         '--bind', f'0.0.0.0:{port}',
-        '--workers', '2',
+        '--workers', '1',
         '--timeout', '120',
         '--log-level', 'info',
         '--access-logfile', '-',
@@ -24,6 +24,9 @@ def main():
     ]
 
     print(f"Command: {' '.join(cmd)}")
+
+    # cmd
+    print(f"Executed start")
 
     # Execute gunicorn
     try:
