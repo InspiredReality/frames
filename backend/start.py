@@ -12,12 +12,14 @@ def main():
     print(f"Starting Gunicorn on port {port}...")
 
     # Build gunicorn command
+    workers = os.environ.get('WEB_CONCURRENCY', '1')
     cmd = [
         'gunicorn',
         'run:create_app()',
         '--bind', f'0.0.0.0:{port}',
-        '--workers', '2',
+        '--workers', workers,
         '--timeout', '120',
+        '--preload',
         '--log-level', 'info',
         '--access-logfile', '-',
         '--error-logfile', '-'
@@ -25,13 +27,15 @@ def main():
 
     print(f"Command: {' '.join(cmd)}")
 
-    cmd
+    # cmd
+    print(f"Executed")
+
     # Execute gunicorn
-    # try:
-    #     subprocess.run(cmd, check=True)
-    # except subprocess.CalledProcessError as e:
-    #     print(f"Error starting Gunicorn: {e}", file=sys.stderr)
-    #     sys.exit(1)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error starting Gunicorn: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
