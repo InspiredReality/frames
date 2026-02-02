@@ -22,6 +22,9 @@ from app.routers.models3d import router as models3d_router
 def create_app() -> FastAPI:
     app = FastAPI(title="Frames API")
 
+    # Dispose any inherited connections from the parent (uvicorn --reload forks)
+    engine.dispose()
+
     # Create tables (safe no-op if they already exist)
     Base.metadata.create_all(bind=engine)
 
