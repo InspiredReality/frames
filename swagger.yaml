@@ -1,0 +1,1095 @@
+openapi: 3.0.3
+info:
+  title: Frames API
+  description: API for managing picture frames, walls, and 3D models
+  version: 1.0.0
+  contact:
+    name: API Support
+
+servers:
+  - url: http://localhost:5000/api
+    description: Local development server
+  - url: https://your-production-url.com/api
+    description: Production server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login or /auth/register
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Picture:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        wall_id:
+          type: integer
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+        image_path:
+          type: string
+        original_image_path:
+          type: string
+        thumbnail_path:
+          type: string
+          nullable: true
+        width_px:
+          type: integer
+        height_px:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        frames:
+          type: array
+          items:
+            $ref: '#/components/schemas/PictureFrame'
+
+    PictureFrame:
+      type: object
+      properties:
+        id:
+          type: integer
+        picture_id:
+          type: integer
+        name:
+          type: string
+        width_cm:
+          type: number
+          format: float
+        height_cm:
+          type: number
+          format: float
+        depth_cm:
+          type: number
+          format: float
+        width_inches:
+          type: number
+          format: float
+        height_inches:
+          type: number
+          format: float
+        depth_inches:
+          type: number
+          format: float
+        frame_color:
+          type: string
+        frame_material:
+          type: string
+        mat_width_inches:
+          type: number
+          format: float
+        mat_color:
+          type: string
+        model_path:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Wall:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        image_path:
+          type: string
+          nullable: true
+        thumbnail_path:
+          type: string
+          nullable: true
+        background_color:
+          type: string
+          nullable: true
+        width_cm:
+          type: number
+          format: float
+          nullable: true
+        height_cm:
+          type: number
+          format: float
+          nullable: true
+        scene_config:
+          type: object
+        frame_placements:
+          type: array
+          items:
+            $ref: '#/components/schemas/FramePlacement'
+        created_at:
+          type: string
+          format: date-time
+
+    FramePlacement:
+      type: object
+      properties:
+        frame_id:
+          type: integer
+        picture_id:
+          type: integer
+        position:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+            z:
+              type: number
+        rotation:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+            z:
+              type: number
+        scale:
+          type: number
+          format: float
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - username
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                username:
+                  type: string
+                  example: johndoe
+                password:
+                  type: string
+                  format: password
+                  example: securePassword123
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  access_token:
+                    type: string
+        '400':
+          description: Bad request - missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email or username already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      description: Authenticate user and return JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: securePassword123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  access_token:
+                    type: string
+        '400':
+          description: Bad request - missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Retrieve the authenticated user's profile
+      responses:
+        '200':
+          description: User profile retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Authentication
+      summary: Update current user
+      description: Update the authenticated user's profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Username already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /walls:
+    get:
+      tags:
+        - Walls
+      summary: Get all walls
+      description: Retrieve all walls for the authenticated user
+      responses:
+        '200':
+          description: List of walls
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  walls:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Wall'
+
+    post:
+      tags:
+        - Walls
+      summary: Create a new wall
+      description: Create a wall from uploaded image or solid color
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Living Room Wall
+                description:
+                  type: string
+                  example: Main wall in living room
+                width_cm:
+                  type: number
+                  format: float
+                  example: 400.0
+                height_cm:
+                  type: number
+                  format: float
+                  example: 250.0
+                background_color:
+                  type: string
+                  example: "#FFFFFF"
+                image:
+                  type: string
+                  format: binary
+                  description: Wall image file (png, jpg, jpeg, gif, webp)
+      responses:
+        '201':
+          description: Wall created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  wall:
+                    $ref: '#/components/schemas/Wall'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /walls/{wall_id}:
+    get:
+      tags:
+        - Walls
+      summary: Get a specific wall
+      description: Retrieve a wall by ID with its assigned frames
+      parameters:
+        - name: wall_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Wall details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wall:
+                    $ref: '#/components/schemas/Wall'
+        '404':
+          description: Wall not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Walls
+      summary: Update a wall
+      description: Update wall details or frame placements
+      parameters:
+        - name: wall_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                width_cm:
+                  type: number
+                  format: float
+                height_cm:
+                  type: number
+                  format: float
+                background_color:
+                  type: string
+                scene_config:
+                  type: object
+                frame_placements:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/FramePlacement'
+      responses:
+        '200':
+          description: Wall updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  wall:
+                    $ref: '#/components/schemas/Wall'
+        '404':
+          description: Wall not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Walls
+      summary: Delete a wall
+      description: Delete a wall and its associated files
+      parameters:
+        - name: wall_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Wall deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Wall not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /walls/{wall_id}/placements:
+    post:
+      tags:
+        - Walls
+      summary: Add frame placement
+      description: Add a frame placement to a wall
+      parameters:
+        - name: wall_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FramePlacement'
+      responses:
+        '200':
+          description: Frame placement added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  wall:
+                    $ref: '#/components/schemas/Wall'
+        '404':
+          description: Wall not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pictures:
+    get:
+      tags:
+        - Pictures
+      summary: Get all pictures
+      description: Retrieve all pictures for the authenticated user
+      responses:
+        '200':
+          description: List of pictures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pictures:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Picture'
+
+    post:
+      tags:
+        - Pictures
+      summary: Create a new picture
+      description: Upload and create a new picture from an image file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Picture image file (png, jpg, jpeg, gif, webp)
+                name:
+                  type: string
+                  example: Artwork Title
+                description:
+                  type: string
+                  example: Description of the artwork
+                wall_id:
+                  type: integer
+                  description: Optional wall assignment
+      responses:
+        '201':
+          description: Picture created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  picture:
+                    $ref: '#/components/schemas/Picture'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pictures/{picture_id}:
+    get:
+      tags:
+        - Pictures
+      summary: Get a specific picture
+      description: Retrieve a picture by ID
+      parameters:
+        - name: picture_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Picture details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  picture:
+                    $ref: '#/components/schemas/Picture'
+        '404':
+          description: Picture not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Pictures
+      summary: Update a picture
+      description: Update picture details
+      parameters:
+        - name: picture_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                wall_id:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: Picture updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  picture:
+                    $ref: '#/components/schemas/Picture'
+        '404':
+          description: Picture not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Pictures
+      summary: Delete a picture
+      description: Delete a picture and all associated frames
+      parameters:
+        - name: picture_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Picture deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Picture not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pictures/{picture_id}/image:
+    put:
+      tags:
+        - Pictures
+      summary: Update picture image
+      description: Update a picture's image (for recrop functionality)
+      parameters:
+        - name: picture_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Image updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  picture:
+                    $ref: '#/components/schemas/Picture'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Picture not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pictures/{picture_id}/frames:
+    post:
+      tags:
+        - Frames
+      summary: Create a frame
+      description: Create a 3D frame for a picture with specified dimensions
+      parameters:
+        - name: picture_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - width
+                - height
+              properties:
+                name:
+                  type: string
+                  example: 8x10 Frame
+                unit:
+                  type: string
+                  enum: [inches, cm]
+                  default: inches
+                  example: inches
+                width:
+                  type: number
+                  format: float
+                  example: 8.0
+                height:
+                  type: number
+                  format: float
+                  example: 10.0
+                depth:
+                  type: number
+                  format: float
+                  example: 1.0
+                frame_color:
+                  type: string
+                  example: "#8B4513"
+                frame_material:
+                  type: string
+                  example: wood
+                mat_width:
+                  type: number
+                  format: float
+                  example: 0.0
+                mat_color:
+                  type: string
+                  example: "#FFFFFF"
+      responses:
+        '201':
+          description: Frame created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  frame:
+                    $ref: '#/components/schemas/PictureFrame'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Picture not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pictures/{picture_id}/frames/{frame_id}:
+    put:
+      tags:
+        - Frames
+      summary: Update a frame
+      description: Update frame dimensions and styling
+      parameters:
+        - name: picture_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: frame_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unit:
+                  type: string
+                  enum: [inches, cm]
+                width:
+                  type: number
+                  format: float
+                height:
+                  type: number
+                  format: float
+                depth:
+                  type: number
+                  format: float
+                frame_color:
+                  type: string
+                frame_material:
+                  type: string
+      responses:
+        '200':
+          description: Frame updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  frame:
+                    $ref: '#/components/schemas/PictureFrame'
+        '404':
+          description: Picture or frame not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Frames
+      summary: Delete a frame
+      description: Delete a frame and its model file
+      parameters:
+        - name: picture_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: frame_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Frame deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Picture or frame not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /models3d/{frame_id}:
+    get:
+      tags:
+        - 3D Models
+      summary: Get 3D model file
+      description: Download the 3D model file for a frame
+      parameters:
+        - name: frame_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 3D model file
+          content:
+            model/gltf-binary:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Frame or model not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /models3d/{frame_id}/info:
+    get:
+      tags:
+        - 3D Models
+      summary: Get 3D model info
+      description: Get information about a 3D model
+      parameters:
+        - name: frame_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Model information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  frame:
+                    $ref: '#/components/schemas/PictureFrame'
+                  picture:
+                    $ref: '#/components/schemas/Picture'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Frame not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /models3d/uploads/{filename}:
+    get:
+      tags:
+        - 3D Models
+      summary: Serve uploaded files
+      description: Serve uploaded files (images, models, etc.)
+      security: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found
+
+tags:
+  - name: Authentication
+    description: User authentication and profile management
+  - name: Walls
+    description: Virtual wall management
+  - name: Pictures
+    description: Picture/artwork management
+  - name: Frames
+    description: 3D frame creation and management
+  - name: 3D Models
+    description: 3D model file operations

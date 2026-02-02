@@ -1,33 +1,36 @@
 """Picture and PictureFrame models."""
 from datetime import datetime
-from app import db
+from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+
+from app.db import Base
 
 
-class Picture(db.Model):
+class Picture(Base):
     """Picture model representing a captured artwork/photo."""
 
     __tablename__ = 'pictures'
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
-    wall_id = db.Column(db.Integer, db.ForeignKey('walls.id'), nullable=True, index=True)  # Optional wall assignment
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    wall_id = Column(Integer, ForeignKey('walls.id'), nullable=True, index=True)  # Optional wall assignment
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
 
     # Image paths
-    image_path = db.Column(db.String(500), nullable=False)
-    original_image_path = db.Column(db.String(500))  # Preserved original from capture
-    thumbnail_path = db.Column(db.String(500))
+    image_path = Column(String(500), nullable=False)
+    original_image_path = Column(String(500))  # Preserved original from capture
+    thumbnail_path = Column(String(500))
 
     # Original image dimensions (pixels)
-    width_px = db.Column(db.Integer)
-    height_px = db.Column(db.Integer)
+    width_px = Column(Integer)
+    height_px = Column(Integer)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationship to frames
-    frames = db.relationship('PictureFrame', backref='picture', lazy='dynamic', cascade='all, delete-orphan')
+    frames = relationship('PictureFrame', backref='picture', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self, include_frames=False):
         """Serialize picture to dictionary."""
@@ -53,37 +56,37 @@ class Picture(db.Model):
         return f'<Picture {self.name}>'
 
 
-class PictureFrame(db.Model):
+class PictureFrame(Base):
     """PictureFrame model representing a 3D frame for a picture."""
 
     __tablename__ = 'picture_frames'
 
-    id = db.Column(db.Integer, primary_key=True)
-    picture_id = db.Column(db.Integer, db.ForeignKey('pictures.id'), nullable=False, index=True)
-    name = db.Column(db.String(100))
+    id = Column(Integer, primary_key=True)
+    picture_id = Column(Integer, ForeignKey('pictures.id'), nullable=False, index=True)
+    name = Column(String(100))
 
     # Real-world dimensions
-    width_inches = db.Column(db.Float, nullable=False)
-    height_inches = db.Column(db.Float, nullable=False)
-    depth_inches = db.Column(db.Float, default=1.0)
+    width_inches = Column(Float, nullable=False)
+    height_inches = Column(Float, nullable=False)
+    depth_inches = Column(Float, default=1.0)
 
     # Metric dimensions (auto-calculated)
-    width_cm = db.Column(db.Float, nullable=False)
-    height_cm = db.Column(db.Float, nullable=False)
-    depth_cm = db.Column(db.Float, default=2.54)
+    width_cm = Column(Float, nullable=False)
+    height_cm = Column(Float, nullable=False)
+    depth_cm = Column(Float, default=2.54)
 
     # Frame styling
-    frame_color = db.Column(db.String(7), default='#8B4513')  # Brown default
-    frame_material = db.Column(db.String(50), default='wood')
-    mat_width_inches = db.Column(db.Float, default=0)  # Mat/border width
-    mat_color = db.Column(db.String(7), default='#FFFFFF')
+    frame_color = Column(String(7), default='#8B4513')  # Brown default
+    frame_material = Column(String(50), default='wood')
+    mat_width_inches = Column(Float, default=0)  # Mat/border width
+    mat_color = Column(String(7), default='#FFFFFF')
 
     # Generated 3D model path
-    model_path = db.Column(db.String(500))
-    model_format = db.Column(db.String(10), default='glb')
+    model_path = Column(String(500))
+    model_format = Column(String(10), default='glb')
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     INCHES_TO_CM = 2.54
 

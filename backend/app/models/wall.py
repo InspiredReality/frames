@@ -1,38 +1,41 @@
 """Wall model for storing virtual wall configurations."""
 from datetime import datetime
-from app import db
+from sqlalchemy import Column, Integer, Float, String, Text, DateTime, JSON, ForeignKey
+from sqlalchemy.orm import relationship
+
+from app.db import Base
 
 
-class Wall(db.Model):
+class Wall(Base):
     """Wall model representing a captured wall with placed frames."""
 
     __tablename__ = 'walls'
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
 
     # Wall image (nullable for color-only walls)
-    image_path = db.Column(db.String(500), nullable=True)
-    thumbnail_path = db.Column(db.String(500))
-    background_color = db.Column(db.String(7))  # Hex color e.g. '#FFFFFF'
+    image_path = Column(String(500), nullable=True)
+    thumbnail_path = Column(String(500))
+    background_color = Column(String(7))  # Hex color e.g. '#FFFFFF'
 
     # Wall dimensions (estimated or user-provided)
-    width_cm = db.Column(db.Float)
-    height_cm = db.Column(db.Float)
+    width_cm = Column(Float)
+    height_cm = Column(Float)
 
     # 3D scene configuration (JSON)
-    scene_config = db.Column(db.JSON, default=dict)
+    scene_config = Column(JSON, default=dict)
 
     # Placed frames configuration (JSON array of frame placements for AR)
-    frame_placements = db.Column(db.JSON, default=list)
+    frame_placements = Column(JSON, default=list)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationship to pictures/frames assigned to this wall
-    pictures = db.relationship('Picture', backref='wall', lazy='dynamic')
+    pictures = relationship('Picture', backref='wall', lazy='dynamic')
 
     def to_dict(self, include_placements=True, include_frames=False):
         """Serialize wall to dictionary."""
