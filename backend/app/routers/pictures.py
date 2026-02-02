@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field
 
 from sqlalchemy.orm import Session
@@ -16,22 +16,6 @@ from app.services.model_generator import generate_frame_model
 from app.utils.uploads import make_safe_filename, save_upload_with_limit, verify_image_file
 
 router = APIRouter()
-
-
-# ----------------------------
-# Optional: Request logging like your before_request
-# ----------------------------
-@router.middleware("http")
-async def log_request(request: Request, call_next):
-    # Keep it lightweight; avoid printing huge headers in prod.
-    print("=== Pictures Router Request ===")
-    print(f"Method: {request.method}")
-    print(f"Path: {request.url.path}")
-    auth = request.headers.get("authorization", "NONE")
-    if len(auth) > 50:
-        auth = auth[:50] + "..."
-    print(f"Auth header: {auth}")
-    return await call_next(request)
 
 
 # ----------------------------

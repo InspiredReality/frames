@@ -1,8 +1,12 @@
 import os
+from pathlib import Path
 from pydantic import BaseModel
 
+# Absolute path so SQLite resolves correctly regardless of CWD
+_DEFAULT_DB = "sqlite:///" + str(Path(__file__).resolve().parent.parent.parent / "frames.db")
+
 class Settings(BaseModel):
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", _DEFAULT_DB)
     ENV: str = os.getenv("ENV", os.getenv("FLASK_ENV", "development"))
 
     UPLOAD_FOLDER: str = os.getenv("UPLOAD_FOLDER", "uploads")

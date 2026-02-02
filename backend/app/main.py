@@ -7,18 +7,23 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.settings import settings
-from app.db import get_db
+from app.db import engine, Base, get_db
 
-# Routers (you'll convert these from Flask Blueprints)
+# Import models so they register with Base.metadata
+from app.models import User, Wall, Picture, PictureFrame  # noqa: F401
+
+# Routers
 from app.routers.auth import router as auth_router
-# from app.routers.walls import router as walls_router
-# from app.routers.pictures import router as pictures_router
-# from app.routers.models3d import router as models3d_router
 from app.routers.walls import router as walls_router
+from app.routers.pictures import router as pictures_router
+from app.routers.models3d import router as models3d_router
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Frames API")
+
+    # Create tables (safe no-op if they already exist)
+    Base.metadata.create_all(bind=engine)
 
     # -------------------
     # CORS
@@ -50,8 +55,8 @@ def create_app() -> FastAPI:
     # -------------------
     app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
     app.include_router(walls_router, prefix="/api/walls", tags=["walls"])
-    # app.include_router(pictures_router, prefix="/api/pictures", tags=["pictures"])
-    # app.include_router(models3d_router, prefix="/api/models", tags=["models"])
+    app.include_router(pictures_router, prefix="/api/pictures", tags=["pictures"])
+    app.include_router(models3d_router, prefix="/api/models", tags=["models"])
 
     # -------------------
     # Root + health + status
