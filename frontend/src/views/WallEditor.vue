@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WallViewer from '@/components/WallViewer.vue'
 import FramePreview2D from '@/components/FramePreview2D.vue'
@@ -182,6 +182,13 @@ const selectFrame = (data) => {
     editingPosition.value = { ...pos }
     savedPosition.value = { ...pos }
     positionUnit.value = 'cm'
+    // Set initial label modes based on current position
+    const wCm = wall.value?.width_cm || 0
+    const hCm = wall.value?.height_cm || 0
+    const xCm = (wCm / 2) + (pos.x * 100)
+    const yCm = (hCm / 2) + (pos.y * 100)
+    xLabelMode.value = (wCm > 0 && xCm / wCm > 0.6) ? 'right' : 'left'
+    yLabelMode.value = (hCm > 0 && yCm / hCm > 0.6) ? 'ceiling' : 'floor'
   }
 }
 
@@ -218,6 +225,8 @@ const resetPosition = () => {
 // Position display: convert internal meters (center-based) to wall-relative measurements
 const wallWidthM = computed(() => (wall.value?.width_cm || 0) * 0.01)
 const wallHeightM = computed(() => (wall.value?.height_cm || 0) * 0.01)
+const wallWidthCmVal = computed(() => wall.value?.width_cm || 0)
+const wallHeightCmVal = computed(() => wall.value?.height_cm || 0)
 
 // "From left" = wallWidth/2 + x (in meters), converted to cm
 const posFromLeftCm = computed({
@@ -230,29 +239,70 @@ const posFromFloorCm = computed({
   set: (val) => { editingPosition.value.y = (val / 100) - wallHeightM.value / 2 }
 })
 
-// ft & in display for position
-const posFromLeftFtIn = computed(() => cmToFtIn(posFromLeftCm.value))
-const posFromFloorFtIn = computed(() => cmToFtIn(posFromFloorCm.value))
+// Hysteresis-based label modes: flip at 60% going one way, flip back at 40% (60% from other side)
+const xLabelMode = ref('left') // 'left' or 'right'
+const yLabelMode = ref('floor') // 'floor' or 'ceiling'
 
-const posFromLeftFt = ref(0)
-const posFromLeftIn = ref(0)
-const posFromFloorFt = ref(0)
-const posFromFloorIn = ref(0)
+// Watch position and apply hysteresis thresholds
+watch(posFromLeftCm, (val) => {
+  const w = wallWidthCmVal.value
+  if (w <= 0) return
+  const pct = val / w
+  if (xLabelMode.value === 'left' && pct > 0.6) {
+    xLabelMode.value = 'right'
+  } else if (xLabelMode.value === 'right' && pct < 0.4) {
+    xLabelMode.value = 'left'
+  }
+})
+
+watch(posFromFloorCm, (val) => {
+  const h = wallHeightCmVal.value
+  if (h <= 0) return
+  const pct = val / h
+  if (yLabelMode.value === 'floor' && pct > 0.6) {
+    yLabelMode.value = 'ceiling'
+  } else if (yLabelMode.value === 'ceiling' && pct < 0.4) {
+    yLabelMode.value = 'floor'
+  }
+})
+
+// Display value: distance from the relevant edge in cm
+const xDisplayCm = computed({
+  get: () => xLabelMode.value === 'left' ? posFromLeftCm.value : +(wallWidthCmVal.value - posFromLeftCm.value).toFixed(1),
+  set: (val) => {
+    posFromLeftCm.value = xLabelMode.value === 'left' ? val : +(wallWidthCmVal.value - val).toFixed(1)
+  }
+})
+
+const yDisplayCm = computed({
+  get: () => yLabelMode.value === 'floor' ? posFromFloorCm.value : +(wallHeightCmVal.value - posFromFloorCm.value).toFixed(1),
+  set: (val) => {
+    posFromFloorCm.value = yLabelMode.value === 'floor' ? val : +(wallHeightCmVal.value - val).toFixed(1)
+  }
+})
+
+const xLabel = computed(() => xLabelMode.value === 'left' ? 'from left' : 'from right')
+const yLabel = computed(() => yLabelMode.value === 'floor' ? 'from floor' : 'from ceiling')
+
+const posXFt = ref(0)
+const posXIn = ref(0)
+const posYFt = ref(0)
+const posYIn = ref(0)
 
 const syncFtInFromCm = () => {
-  const lft = cmToFtIn(posFromLeftCm.value)
-  posFromLeftFt.value = lft.ft
-  posFromLeftIn.value = lft.inches
-  const fft = cmToFtIn(posFromFloorCm.value)
-  posFromFloorFt.value = fft.ft
-  posFromFloorIn.value = fft.inches
+  const xfi = cmToFtIn(Math.max(0, xDisplayCm.value))
+  posXFt.value = xfi.ft
+  posXIn.value = xfi.inches
+  const yfi = cmToFtIn(Math.max(0, yDisplayCm.value))
+  posYFt.value = yfi.ft
+  posYIn.value = yfi.inches
 }
 
 const applyFtInToPosition = (axis) => {
   if (axis === 'x') {
-    posFromLeftCm.value = +ftInToCm(posFromLeftFt.value || 0, posFromLeftIn.value || 0).toFixed(1)
+    xDisplayCm.value = +ftInToCm(posXFt.value || 0, posXIn.value || 0).toFixed(1)
   } else {
-    posFromFloorCm.value = +ftInToCm(posFromFloorFt.value || 0, posFromFloorIn.value || 0).toFixed(1)
+    yDisplayCm.value = +ftInToCm(posYFt.value || 0, posYIn.value || 0).toFixed(1)
   }
 }
 
@@ -265,6 +315,26 @@ const togglePositionUnit = () => {
     applyFtInToPosition('y')
     positionUnit.value = 'cm'
   }
+}
+
+// Format a placement position as human-readable with smart left/right, floor/ceiling
+const formatPlacementPosition = (placement) => {
+  const wCm = wall.value?.width_cm || 0
+  const hCm = wall.value?.height_cm || 0
+  const xCm = (wCm / 2) + ((placement.position?.x || 0) * 100)
+  const yCm = (hCm / 2) + ((placement.position?.y || 0) * 100)
+
+  const useRight = wCm > 0 && (xCm / wCm) > 0.6
+  const useCeiling = hCm > 0 && (yCm / hCm) > 0.6
+
+  const xVal = useRight ? Math.max(0, wCm - xCm) : Math.max(0, xCm)
+  const yVal = useCeiling ? Math.max(0, hCm - yCm) : Math.max(0, yCm)
+  const xFtIn = cmToFtIn(xVal)
+  const yFtIn = cmToFtIn(yVal)
+
+  const xDir = useRight ? 'from right' : 'from left'
+  const yDir = useCeiling ? 'from ceiling' : 'from floor'
+  return `${xFtIn.ft}'${xFtIn.inches}" ${xDir}, ${yFtIn.ft}'${yFtIn.inches}" ${yDir}`
 }
 
 // Handle frame drag-move from 3D viewer
@@ -766,7 +836,7 @@ const getFrameDimensions = (frame) => {
                   {{ allFrames.find(f => f.id === placement.frame_id)?.pictureName || 'Unknown' }}
                 </p>
                 <p class="text-sm text-gray-400">
-                  Position: ({{ placement.position?.x?.toFixed(2) }}, {{ placement.position?.y?.toFixed(2) }})
+                  {{ formatPlacementPosition(placement) }}
                 </p>
               </div>
             </div>
@@ -1018,7 +1088,7 @@ const getFrameDimensions = (frame) => {
         <!-- Position editing -->
         <div class="mb-4">
           <h3 class="font-semibold mb-2">Position on Wall</h3>
-          <p class="text-sm text-gray-400 mb-3">Distance from the left edge and floor</p>
+          <p class="text-sm text-gray-400 mb-3">Distance from wall edges</p>
 
           <!-- Unit toggle -->
           <div class="flex items-center gap-2 mb-3">
@@ -1044,7 +1114,7 @@ const getFrameDimensions = (frame) => {
             <div class="flex-1">
               <!-- X Position (horizontal slider) -->
               <div class="mb-3">
-                <label class="block text-sm text-gray-400 mb-1">X Position</label>
+                <label class="block text-sm text-gray-400 mb-1">X Position <span class="text-gray-500">({{ xLabel }})</span></label>
                 <input
                   type="range"
                   v-model.number="posFromLeftCm"
@@ -1059,19 +1129,19 @@ const getFrameDimensions = (frame) => {
                   <div class="flex items-center gap-1">
                     <input
                       type="number"
-                      v-model.number="posFromLeftCm"
+                      v-model.number="xDisplayCm"
                       step="0.1"
                       min="0"
                       class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
                     />
-                    <span class="text-xs text-gray-400">cm</span>
+                    <span class="text-xs text-gray-400 whitespace-nowrap">cm {{ xLabel }}</span>
                   </div>
                 </div>
                 <!-- ft & in input -->
                 <div v-else class="mt-1 flex items-center gap-1">
                   <input
                     type="number"
-                    v-model.number="posFromLeftFt"
+                    v-model.number="posXFt"
                     min="0"
                     @input="applyFtInToPosition('x')"
                     class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
@@ -1079,14 +1149,14 @@ const getFrameDimensions = (frame) => {
                   <span class="text-xs text-gray-400">ft</span>
                   <input
                     type="number"
-                    v-model.number="posFromLeftIn"
+                    v-model.number="posXIn"
                     step="0.1"
                     min="0"
                     max="11.9"
                     @input="applyFtInToPosition('x')"
                     class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
                   />
-                  <span class="text-xs text-gray-400">in</span>
+                  <span class="text-xs text-gray-400 whitespace-nowrap">in {{ xLabel }}</span>
                 </div>
               </div>
 
@@ -1111,7 +1181,7 @@ const getFrameDimensions = (frame) => {
 
             <!-- Right column: Y slider (vertical) + input -->
             <div class="flex flex-col items-center" style="width: 120px;">
-              <label class="block text-sm text-gray-400 mb-1">Y Position</label>
+              <label class="block text-sm text-gray-400 mb-1">Y Position <span class="text-gray-500">({{ yLabel }})</span></label>
               <div class="flex items-stretch gap-2 flex-1">
                 <!-- Vertical slider -->
                 <div class="flex items-center" style="height: 180px;">
@@ -1131,7 +1201,7 @@ const getFrameDimensions = (frame) => {
                   <template v-if="positionUnit === 'cm'">
                     <input
                       type="number"
-                      v-model.number="posFromFloorCm"
+                      v-model.number="yDisplayCm"
                       step="0.1"
                       min="0"
                       class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
@@ -1143,7 +1213,7 @@ const getFrameDimensions = (frame) => {
                       <div class="flex items-center gap-1">
                         <input
                           type="number"
-                          v-model.number="posFromFloorFt"
+                          v-model.number="posYFt"
                           min="0"
                           @input="applyFtInToPosition('y')"
                           class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
@@ -1153,7 +1223,7 @@ const getFrameDimensions = (frame) => {
                       <div class="flex items-center gap-1">
                         <input
                           type="number"
-                          v-model.number="posFromFloorIn"
+                          v-model.number="posYIn"
                           step="0.1"
                           min="0"
                           max="11.9"
