@@ -23,10 +23,11 @@ const selectedPlacementIndex = ref(null)
 const editingPosition = ref({ x: 0, y: 0 })
 const savedPosition = ref({ x: 0, y: 0 })
 const savingPosition = ref(false)
+const positionUnit = ref('cm') // 'cm' or 'ft'
 
 // Wall editing state
 const editingWall = ref(false)
-const wallEdit = ref({ name: '', description: '', width: 0, height: 0 })
+const wallEdit = ref({ name: '', description: '', width: 0, height: 0, unit: 'cm' })
 const savingWall = ref(false)
 
 // Frame property editing state
@@ -180,6 +181,7 @@ const selectFrame = (data) => {
     }
     editingPosition.value = { ...pos }
     savedPosition.value = { ...pos }
+    positionUnit.value = 'cm'
   }
 }
 
@@ -213,6 +215,58 @@ const resetPosition = () => {
   editingPosition.value = { ...savedPosition.value }
 }
 
+// Position display: convert internal meters (center-based) to wall-relative measurements
+const wallWidthM = computed(() => (wall.value?.width_cm || 0) * 0.01)
+const wallHeightM = computed(() => (wall.value?.height_cm || 0) * 0.01)
+
+// "From left" = wallWidth/2 + x (in meters), converted to cm
+const posFromLeftCm = computed({
+  get: () => +((wallWidthM.value / 2 + editingPosition.value.x) * 100).toFixed(1),
+  set: (val) => { editingPosition.value.x = (val / 100) - wallWidthM.value / 2 }
+})
+// "From floor" = wallHeight/2 + y (in meters), converted to cm
+const posFromFloorCm = computed({
+  get: () => +((wallHeightM.value / 2 + editingPosition.value.y) * 100).toFixed(1),
+  set: (val) => { editingPosition.value.y = (val / 100) - wallHeightM.value / 2 }
+})
+
+// ft & in display for position
+const posFromLeftFtIn = computed(() => cmToFtIn(posFromLeftCm.value))
+const posFromFloorFtIn = computed(() => cmToFtIn(posFromFloorCm.value))
+
+const posFromLeftFt = ref(0)
+const posFromLeftIn = ref(0)
+const posFromFloorFt = ref(0)
+const posFromFloorIn = ref(0)
+
+const syncFtInFromCm = () => {
+  const lft = cmToFtIn(posFromLeftCm.value)
+  posFromLeftFt.value = lft.ft
+  posFromLeftIn.value = lft.inches
+  const fft = cmToFtIn(posFromFloorCm.value)
+  posFromFloorFt.value = fft.ft
+  posFromFloorIn.value = fft.inches
+}
+
+const applyFtInToPosition = (axis) => {
+  if (axis === 'x') {
+    posFromLeftCm.value = +ftInToCm(posFromLeftFt.value || 0, posFromLeftIn.value || 0).toFixed(1)
+  } else {
+    posFromFloorCm.value = +ftInToCm(posFromFloorFt.value || 0, posFromFloorIn.value || 0).toFixed(1)
+  }
+}
+
+const togglePositionUnit = () => {
+  if (positionUnit.value === 'cm') {
+    syncFtInFromCm()
+    positionUnit.value = 'ft'
+  } else {
+    applyFtInToPosition('x')
+    applyFtInToPosition('y')
+    positionUnit.value = 'cm'
+  }
+}
+
 // Handle frame drag-move from 3D viewer
 const onFrameMoved = async (data) => {
   const { placementIndex, position } = data
@@ -234,12 +288,54 @@ const onFrameMoved = async (data) => {
 }
 
 // Wall editing
+const cmToFtIn = (cm) => {
+  const totalInches = cm / 2.54
+  const ft = Math.floor(totalInches / 12)
+  const inches = +(totalInches - ft * 12).toFixed(1)
+  return { ft, inches }
+}
+
+const ftInToCm = (ft, inches) => {
+  return (ft * 12 + inches) * 2.54
+}
+
+const toggleWallUnit = () => {
+  const w = parseFloat(wallEdit.value.width) || 0
+  const h = parseFloat(wallEdit.value.height) || 0
+  if (wallEdit.value.unit === 'cm') {
+    // Convert cm -> ft & in
+    const wFtIn = cmToFtIn(w)
+    const hFtIn = cmToFtIn(h)
+    wallEdit.value.widthFt = wFtIn.ft
+    wallEdit.value.widthIn = wFtIn.inches
+    wallEdit.value.heightFt = hFtIn.ft
+    wallEdit.value.heightIn = hFtIn.inches
+    wallEdit.value.unit = 'ft'
+  } else {
+    // Convert ft & in -> cm
+    wallEdit.value.width = +ftInToCm(
+      parseFloat(wallEdit.value.widthFt) || 0,
+      parseFloat(wallEdit.value.widthIn) || 0
+    ).toFixed(1)
+    wallEdit.value.height = +ftInToCm(
+      parseFloat(wallEdit.value.heightFt) || 0,
+      parseFloat(wallEdit.value.heightIn) || 0
+    ).toFixed(1)
+    wallEdit.value.unit = 'cm'
+  }
+}
+
 const startEditWall = () => {
   wallEdit.value = {
     name: wall.value?.name || '',
     description: wall.value?.description || '',
     width: wall.value?.width_cm || 0,
-    height: wall.value?.height_cm || 0
+    height: wall.value?.height_cm || 0,
+    unit: 'cm',
+    widthFt: 0,
+    widthIn: 0,
+    heightFt: 0,
+    heightIn: 0
   }
   editingWall.value = true
 }
@@ -250,12 +346,20 @@ const cancelEditWall = () => {
 
 const saveWall = async () => {
   savingWall.value = true
+  let widthCm, heightCm
+  if (wallEdit.value.unit === 'ft') {
+    widthCm = ftInToCm(parseFloat(wallEdit.value.widthFt) || 0, parseFloat(wallEdit.value.widthIn) || 0)
+    heightCm = ftInToCm(parseFloat(wallEdit.value.heightFt) || 0, parseFloat(wallEdit.value.heightIn) || 0)
+  } else {
+    widthCm = parseFloat(wallEdit.value.width) || 0
+    heightCm = parseFloat(wallEdit.value.height) || 0
+  }
   try {
     await wallsStore.updateWall(wall.value.id, {
       name: wallEdit.value.name,
       description: wallEdit.value.description,
-      width_cm: parseFloat(wallEdit.value.width) || 0,
-      height_cm: parseFloat(wallEdit.value.height) || 0
+      width_cm: widthCm,
+      height_cm: heightCm
     })
     editingWall.value = false
   } catch (err) {
@@ -523,7 +627,25 @@ const getFrameDimensions = (frame) => {
               class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm resize-none"
             ></textarea>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-sm text-gray-400">Unit:</span>
+            <button
+              @click="toggleWallUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="wallEdit.unit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              cm
+            </button>
+            <button
+              @click="toggleWallUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="wallEdit.unit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              ft &amp; in
+            </button>
+          </div>
+          <!-- cm inputs -->
+          <div v-if="wallEdit.unit === 'cm'" class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm text-gray-400 mb-1">Width (cm)</label>
               <input
@@ -543,6 +665,59 @@ const getFrameDimensions = (frame) => {
                 min="0"
                 class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
               />
+            </div>
+          </div>
+          <!-- ft & in inputs -->
+          <div v-else class="space-y-3">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Width</label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.widthFt"
+                    min="0"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">ft</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.widthIn"
+                    step="0.1"
+                    min="0"
+                    max="11.9"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">in</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Height</label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.heightFt"
+                    min="0"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">ft</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.heightIn"
+                    step="0.1"
+                    min="0"
+                    max="11.9"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">in</span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="flex gap-3">
@@ -843,59 +1018,155 @@ const getFrameDimensions = (frame) => {
         <!-- Position editing -->
         <div class="mb-4">
           <h3 class="font-semibold mb-2">Position on Wall</h3>
-          <p class="text-sm text-gray-400 mb-3">Adjust the X and Y position of the frame</p>
+          <p class="text-sm text-gray-400 mb-3">Distance from the left edge and floor</p>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">X Position</label>
-              <input
-                type="range"
-                v-model.number="editingPosition.x"
-                min="-3"
-                max="3"
-                step="0.1"
-                class="w-full"
-              />
-              <input
-                type="number"
-                v-model.number="editingPosition.x"
-                step="0.1"
-                class="w-full mt-1 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-              />
-            </div>
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Y Position</label>
-              <input
-                type="range"
-                v-model.number="editingPosition.y"
-                min="-2"
-                max="2"
-                step="0.1"
-                class="w-full"
-              />
-              <input
-                type="number"
-                v-model.number="editingPosition.y"
-                step="0.1"
-                class="w-full mt-1 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-              />
-            </div>
+          <!-- Unit toggle -->
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-sm text-gray-400">Unit:</span>
+            <button
+              @click="togglePositionUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="positionUnit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              cm
+            </button>
+            <button
+              @click="togglePositionUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="positionUnit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              ft &amp; in
+            </button>
           </div>
-          <div class="flex gap-3 mt-3">
-            <button
-              @click="resetPosition"
-              :disabled="editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y"
-              class="btn btn-secondary flex-1 text-sm"
-            >
-              Reset
-            </button>
-            <button
-              @click="savePosition"
-              :disabled="savingPosition || (editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y)"
-              class="btn btn-primary flex-1 text-sm"
-            >
-              {{ savingPosition ? 'Saving...' : 'Save Position' }}
-            </button>
+
+          <div class="flex gap-4">
+            <!-- Left column: X slider + buttons -->
+            <div class="flex-1">
+              <!-- X Position (horizontal slider) -->
+              <div class="mb-3">
+                <label class="block text-sm text-gray-400 mb-1">X Position</label>
+                <input
+                  type="range"
+                  v-model.number="posFromLeftCm"
+                  :min="0"
+                  :max="wall?.width_cm || 300"
+                  step="0.5"
+                  class="w-full"
+                  @input="positionUnit === 'ft' && syncFtInFromCm()"
+                />
+                <!-- cm input -->
+                <div v-if="positionUnit === 'cm'" class="mt-1">
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      v-model.number="posFromLeftCm"
+                      step="0.1"
+                      min="0"
+                      class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400">cm</span>
+                  </div>
+                </div>
+                <!-- ft & in input -->
+                <div v-else class="mt-1 flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="posFromLeftFt"
+                    min="0"
+                    @input="applyFtInToPosition('x')"
+                    class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-xs text-gray-400">ft</span>
+                  <input
+                    type="number"
+                    v-model.number="posFromLeftIn"
+                    step="0.1"
+                    min="0"
+                    max="11.9"
+                    @input="applyFtInToPosition('x')"
+                    class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-xs text-gray-400">in</span>
+                </div>
+              </div>
+
+              <!-- Buttons stacked -->
+              <div class="space-y-2 mt-3">
+                <button
+                  @click="resetPosition"
+                  :disabled="editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y"
+                  class="btn btn-secondary w-full text-sm"
+                >
+                  Reset
+                </button>
+                <button
+                  @click="savePosition"
+                  :disabled="savingPosition || (editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y)"
+                  class="btn btn-primary w-full text-sm"
+                >
+                  {{ savingPosition ? 'Saving...' : 'Save Position' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Right column: Y slider (vertical) + input -->
+            <div class="flex flex-col items-center" style="width: 120px;">
+              <label class="block text-sm text-gray-400 mb-1">Y Position</label>
+              <div class="flex items-stretch gap-2 flex-1">
+                <!-- Vertical slider -->
+                <div class="flex items-center" style="height: 180px;">
+                  <input
+                    type="range"
+                    v-model.number="posFromFloorCm"
+                    :min="0"
+                    :max="wall?.height_cm || 300"
+                    step="0.5"
+                    class="vertical-slider"
+                    style="width: 180px; transform: rotate(-90deg); transform-origin: center center;"
+                    @input="positionUnit === 'ft' && syncFtInFromCm()"
+                  />
+                </div>
+                <!-- Input beside slider -->
+                <div class="flex flex-col justify-center">
+                  <template v-if="positionUnit === 'cm'">
+                    <input
+                      type="number"
+                      v-model.number="posFromFloorCm"
+                      step="0.1"
+                      min="0"
+                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400 text-center mt-1">cm</span>
+                  </template>
+                  <template v-else>
+                    <div class="space-y-1">
+                      <div class="flex items-center gap-1">
+                        <input
+                          type="number"
+                          v-model.number="posFromFloorFt"
+                          min="0"
+                          @input="applyFtInToPosition('y')"
+                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                        />
+                        <span class="text-xs text-gray-400">ft</span>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <input
+                          type="number"
+                          v-model.number="posFromFloorIn"
+                          step="0.1"
+                          min="0"
+                          max="11.9"
+                          @input="applyFtInToPosition('y')"
+                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                        />
+                        <span class="text-xs text-gray-400">in</span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

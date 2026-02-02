@@ -32,10 +32,13 @@ class FrameCreateRequest(BaseModel):
     width: float
     height: float
     depth: Optional[float] = None
+    total_width: Optional[float] = None
+    total_height: Optional[float] = None
 
     name: Optional[str] = None
     frame_color: str = Field(default="#8B4513")
     frame_material: str = Field(default="wood")
+    frame_thickness: Optional[float] = None
     mat_width: float = Field(default=0)
     mat_color: str = Field(default="#FFFFFF")
 
@@ -315,9 +318,11 @@ def create_frame(
     )
 
     if unit == "cm":
-        frame.set_dimensions_cm(payload.width, payload.height, depth)
+        frame.set_dimensions_cm(payload.width, payload.height, depth,
+                                total_width=payload.total_width, total_height=payload.total_height)
     else:
-        frame.set_dimensions_inches(payload.width, payload.height, depth)
+        frame.set_dimensions_inches(payload.width, payload.height, depth,
+                                    total_width=payload.total_width, total_height=payload.total_height)
 
     db.add(frame)
     db.flush()  # get frame.id without committing yet

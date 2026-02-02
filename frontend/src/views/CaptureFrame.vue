@@ -22,6 +22,7 @@ const selectedWallId = ref(null)
 const frameColor = ref('#000000')
 const frameThickness = ref(1)
 const showColorPicker = ref(false)
+const totalDimensions = ref({ width: 0, height: 0 })
 const loading = ref(false)
 const error = ref('')
 
@@ -112,7 +113,9 @@ const savePicture = async () => {
       depth: parseFloat(dimensions.value.depth) || 1,
       unit: dimensions.value.unit,
       frame_color: frameColor.value,
-      frame_thickness: frameThickness.value
+      frame_thickness: frameThickness.value,
+      total_width: totalDimensions.value.width,
+      total_height: totalDimensions.value.height
     })
 
     // If a wall was selected, also add a frame placement to that wall
@@ -294,7 +297,7 @@ const savePicture = async () => {
         <!-- Side by side: cropped image and 3D preview -->
         <div class="grid md:grid-cols-2 gap-4 mb-6">
           <!-- Cropped Image -->
-          <div>
+          <!-- <div>
             <h4 class="text-sm text-gray-400 mb-2">Your Image</h4>
             <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center">
               <img
@@ -303,7 +306,7 @@ const savePicture = async () => {
                 class="max-w-full max-h-full object-contain"
               />
             </div>
-          </div>
+          </div> -->
 
           <!-- 3D Preview -->
           <div>
@@ -317,6 +320,7 @@ const savePicture = async () => {
               }"
               :frameColor="frameColor"
               :frameThickness="frameThickness"
+              @update:totalDimensions="totalDimensions = $event"
             />
           </div>
         </div>
@@ -390,13 +394,13 @@ const savePicture = async () => {
         <div class="bg-dark-300 rounded-lg p-4 mb-6">
           <h4 class="font-semibold mb-2">Frame Details</h4>
           <p class="text-gray-400 text-sm">
-            Size: {{ dimensions.width }} x {{ dimensions.height }} {{ dimensions.unit }}
+            Total Size: {{ totalDimensions.width }} x {{ totalDimensions.height }} {{ dimensions.unit }}
           </p>
           <p class="text-gray-400 text-sm">
-            Depth: {{ dimensions.depth }} {{ dimensions.unit }}
+            Image: {{ dimensions.width }} x {{ dimensions.height }} {{ dimensions.unit }}
           </p>
           <p class="text-gray-400 text-sm">
-            Image: {{ croppedImage?.width }} x {{ croppedImage?.height }} px
+            Frame: {{ frameThickness * 2 }} x {{ frameThickness * 2 }} {{ dimensions.unit }}
           </p>
           <p v-if="selectedWall" class="text-gray-400 text-sm">
             Wall: {{ selectedWall.name }}

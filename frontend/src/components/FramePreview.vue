@@ -3,6 +3,8 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
+const emit = defineEmits(['update:totalDimensions'])
+
 const props = defineProps({
   imageUrl: String,
   dimensions: {
@@ -132,9 +134,12 @@ const createFrame = () => {
 
   scene.add(frameGroup)
 
-  // Adjust camera to fit
-  const maxDim = Math.max(totalWidth, totalHeight)
-  camera.position.z = maxDim * 2
+  emit('update:totalDimensions', { width: totalWidth, height: totalHeight })
+
+  // Adjust camera to fit - base on picture size so the image doesn't
+  // appear to shrink when frame thickness increases
+  const maxPicDim = Math.max(width, height)
+  camera.position.z = maxPicDim * 2.5
 }
 
 const animate = () => {
