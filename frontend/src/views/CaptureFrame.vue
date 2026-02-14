@@ -5,6 +5,7 @@ import CameraCapture from '@/components/CameraCapture.vue'
 import DimensionInput from '@/components/DimensionInput.vue'
 import FramePreview from '@/components/FramePreview.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
+import QrCodeCard from '@/components/QrCodeCard.vue'
 import { usePicturesStore } from '@/store/pictures'
 import { useWallsStore } from '@/store/walls'
 import { getUploadUrl } from '@/services/api'
@@ -179,6 +180,9 @@ const savePicture = async () => {
         Take a clear photo of the artwork or picture you want to add
       </p>
       <CameraCapture ref="cameraRef" @capture="onCapture" @error="onCameraError" />
+      <div class="mt-6">
+        <QrCodeCard />
+      </div>
     </div>
 
     <!-- Step 2: Crop & Dimensions - Two Column Layout -->
