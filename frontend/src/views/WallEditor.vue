@@ -442,15 +442,17 @@ const saveWall = async () => {
 // Frame dimension editing
 const startEditFrameDimensions = () => {
   if (!selectedFrame.value) return
+  const unit = 'cm' // Default to cm
   frameDimensionEdit.value = {
     width: selectedFrame.value.dimensions?.cm?.width || 0,
     height: selectedFrame.value.dimensions?.cm?.height || 0,
-    unit: 'cm'
+    unit: unit
   }
-  // Load frame styling
+  // Load frame styling (thickness is stored in inches, convert to selected unit)
+  const thicknessInches = selectedFrame.value.styling?.frame_thickness || 1
   frameStyleEdit.value = {
     color: selectedFrame.value.styling?.frame_color || '#000000',
-    thickness: selectedFrame.value.styling?.frame_thickness || 1
+    thickness: unit === 'cm' ? thicknessInches * 2.54 : thicknessInches
   }
   showCustomColorPicker.value = false
   editingFrameDimensions.value = true
@@ -464,12 +466,17 @@ const saveFrameDimensions = async () => {
   if (!selectedFrame.value || !selectedPicture.value) return
   savingFrameEdit.value = true
   try {
+    // Convert thickness to inches for API (thickness is always stored in inches on backend)
+    const thicknessInches = frameDimensionEdit.value.unit === 'cm'
+      ? frameStyleEdit.value.thickness / 2.54
+      : frameStyleEdit.value.thickness
+
     await picturesStore.updateFrame(selectedPicture.value.id, selectedFrame.value.id, {
       width: frameDimensionEdit.value.width,
       height: frameDimensionEdit.value.height,
       unit: frameDimensionEdit.value.unit,
       frame_color: frameStyleEdit.value.color,
-      frame_thickness: frameStyleEdit.value.thickness
+      frame_thickness: thicknessInches
     })
     editingFrameDimensions.value = false
     showCustomColorPicker.value = false
@@ -577,13 +584,30 @@ const closeFrameEditor = () => {
 // Get frame dimensions for preview
 const getFrameDimensions = (frame) => {
   if (frame?.dimensions?.cm) {
+    // Use editing values if currently editing this frame
+    if (editingFrameDimensions.value && frame.id === selectedFrame.value?.id) {
+      return {
+        widthCm: frameDimensionEdit.value.unit === 'cm'
+          ? frameDimensionEdit.value.width
+          : frameDimensionEdit.value.width * 2.54,
+        heightCm: frameDimensionEdit.value.unit === 'cm'
+          ? frameDimensionEdit.value.height
+          : frameDimensionEdit.value.height * 2.54,
+        frameColor: frameStyleEdit.value.color,
+        frameThickness: frameDimensionEdit.value.unit === 'cm'
+          ? frameStyleEdit.value.thickness / 2.54
+          : frameStyleEdit.value.thickness
+      }
+    }
+
     return {
       widthCm: frame.dimensions.cm.width || 20,
       heightCm: frame.dimensions.cm.height || 25,
-      frameColor: frame.styling?.frame_color || '#8B4513'
+      frameColor: frame.styling?.frame_color || '#8B4513',
+      frameThickness: frame.styling?.frame_thickness || 1
     }
   }
-  return { widthCm: 20, heightCm: 25, frameColor: '#8B4513' }
+  return { widthCm: 20, heightCm: 25, frameColor: '#8B4513', frameThickness: 1 }
 }
 </script>
 
@@ -905,6 +929,7 @@ const getFrameDimensions = (frame) => {
             :widthCm="getFrameDimensions(selectedFrame).widthCm"
             :heightCm="getFrameDimensions(selectedFrame).heightCm"
             :frameColor="getFrameDimensions(selectedFrame).frameColor"
+            :frameThickness="getFrameDimensions(selectedFrame).frameThickness"
             :maxWidth="300"
             :maxHeight="300"
           />
@@ -993,13 +1018,15 @@ const getFrameDimensions = (frame) => {
 
             <!-- Frame Thickness -->
             <div>
-              <label class="block text-xs text-gray-400 mb-1">Frame Thickness (inches)</label>
+              <label class="block text-xs text-gray-400 mb-1">
+                Frame Thickness ({{ frameDimensionEdit.unit }})
+              </label>
               <input
                 v-model.number="frameStyleEdit.thickness"
                 type="number"
-                min="0.25"
-                max="5"
-                step="0.25"
+                :min="frameDimensionEdit.unit === 'cm' ? 0.6 : 0.25"
+                :max="frameDimensionEdit.unit === 'cm' ? 12.7 : 5"
+                :step="frameDimensionEdit.unit === 'cm' ? 0.1 : 0.25"
                 class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
               />
             </div>
@@ -1234,9 +1261,9 @@ const getFrameDimensions = (frame) => {
       class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[60]"
       @click.self="cancelRecrop"
     >
-      <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold">Recrop Image</h2>
+      <div class="card max-w-5xl w-full max-h-[95vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold">Recrop Image</h2>
           <button @click="cancelRecrop" class="text-gray-400 hover:text-white">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -1244,7 +1271,11 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
 
-        <div class="mb-4">
+        <p class="text-sm text-gray-400 mb-4">
+          Drag the corners or edges to select the area you want to keep
+        </p>
+
+        <div class="mb-6">
           <ImageCropper
             :key="effectiveAspectRatio"
             :imageUrl="recropImageUrl"
@@ -1253,12 +1284,12 @@ const getFrameDimensions = (frame) => {
           />
         </div>
 
-        <div v-if="recropAspectRatio" class="mb-4 flex items-center gap-2">
+        <div v-if="recropAspectRatio" class="mb-6 flex items-center gap-2 bg-dark-300 rounded-lg p-3">
           <input
             type="checkbox"
             id="lockAspectRatioWall"
             v-model="lockAspectRatio"
-            class="w-4 h-4 rounded border-gray-600 bg-dark-300 text-primary-500 focus:ring-primary-500"
+            class="w-4 h-4 rounded border-gray-600 bg-dark-100 text-primary-500 focus:ring-primary-500"
           />
           <label for="lockAspectRatioWall" class="text-sm text-gray-300">
             Lock to current frame ratio ({{ recropAspectRatio?.toFixed(2) }})
