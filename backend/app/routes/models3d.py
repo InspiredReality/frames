@@ -2,6 +2,7 @@
 import os
 from flask import Blueprint, send_from_directory, current_app, jsonify, make_response
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from app import db
 from app.models import PictureFrame, Picture
 
 bp = Blueprint('models3d', __name__)
@@ -13,12 +14,12 @@ def get_model(frame_id):
     """Get the 3D model file for a frame."""
     user_id = get_jwt_identity()
 
-    frame = PictureFrame.query.get(frame_id)
+    frame = db.session.get(PictureFrame,frame_id)
     if not frame:
         return jsonify({'error': 'Frame not found'}), 404
 
     # Verify ownership
-    picture = Picture.query.get(frame.picture_id)
+    picture = db.session.get(Picture,frame.picture_id)
     if not picture or picture.user_id != user_id:
         return jsonify({'error': 'Access denied'}), 403
 
@@ -38,12 +39,12 @@ def get_model_info(frame_id):
     """Get information about a 3D model."""
     user_id = get_jwt_identity()
 
-    frame = PictureFrame.query.get(frame_id)
+    frame = db.session.get(PictureFrame,frame_id)
     if not frame:
         return jsonify({'error': 'Frame not found'}), 404
 
     # Verify ownership
-    picture = Picture.query.get(frame.picture_id)
+    picture = db.session.get(Picture,frame.picture_id)
     if not picture or picture.user_id != user_id:
         return jsonify({'error': 'Access denied'}), 403
 
