@@ -21,6 +21,17 @@ const frameDimensionEdit = ref({ width: 0, height: 0, unit: 'cm' })
 const wallDimensionEdit = ref({ width: 0, height: 0 })
 const savingDimensions = ref(false)
 
+// Frame styling state
+const frameStyleEdit = ref({ color: '#000000', thickness: 1 })
+const showColorPicker = ref(false)
+
+// Preset colors (same as CaptureFrame)
+const presetColors = [
+  { label: 'Black', value: '#000000' },
+  { label: 'White', value: '#FFFFFF' },
+  { label: 'Brown', value: '#8B4513' }
+]
+
 // Recrop state
 const showRecropModal = ref(false)
 const recropImageUrl = ref('')
@@ -211,6 +222,12 @@ const startEditingFrameDimensions = (frame) => {
       height: frameData.dimensions?.cm?.height || 0,
       unit: 'cm'
     }
+    // Load frame styling
+    frameStyleEdit.value = {
+      color: frameData.styling?.frame_color || '#000000',
+      thickness: frameData.styling?.frame_thickness || 1
+    }
+    showColorPicker.value = false
     editingFrameDimensions.value = true
   }
 }
@@ -228,9 +245,12 @@ const saveFrameDimensions = async () => {
     await picturesStore.updateFrame(selectedFrame.value.id, frameData.id, {
       width: frameDimensionEdit.value.width,
       height: frameDimensionEdit.value.height,
-      unit: frameDimensionEdit.value.unit
+      unit: frameDimensionEdit.value.unit,
+      frame_color: frameStyleEdit.value.color,
+      frame_thickness: frameStyleEdit.value.thickness
     })
     editingFrameDimensions.value = false
+    showColorPicker.value = false
     // Refresh pictures to get updated data
     await picturesStore.fetchPictures()
     // Update selectedFrame with new data
@@ -381,10 +401,24 @@ const saveRecrop = async () => {
   }
 }
 
-// Get frame dimensions for preview
+// Get frame dimensions for preview (with reactive editing values)
 const getFrameDimensions = (frame) => {
   if (frame?.frames?.length) {
     const frameData = frame.frames[0]
+
+    // Use editing values if currently editing, otherwise use saved values
+    if (editingFrameDimensions.value && frame.id === selectedFrame.value?.id) {
+      return {
+        widthCm: frameDimensionEdit.value.unit === 'cm'
+          ? frameDimensionEdit.value.width
+          : frameDimensionEdit.value.width * 2.54,
+        heightCm: frameDimensionEdit.value.unit === 'cm'
+          ? frameDimensionEdit.value.height
+          : frameDimensionEdit.value.height * 2.54,
+        frameColor: frameStyleEdit.value.color
+      }
+    }
+
     return {
       widthCm: frameData.dimensions?.cm?.width || 20,
       heightCm: frameData.dimensions?.cm?.height || 25,
@@ -625,6 +659,60 @@ const getFrameDimensions = (frame) => {
                     <option value="inches">inches</option>
                   </select>
                 </div>
+
+                <!-- Frame Thickness -->
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Frame Thickness (inches)</label>
+                  <input
+                    v-model.number="frameStyleEdit.thickness"
+                    type="number"
+                    min="0.25"
+                    max="5"
+                    step="0.25"
+                    class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                </div>
+
+                <!-- Frame Color -->
+                <div>
+                  <label class="block text-xs text-gray-400 mb-2">Frame Color</label>
+                  <div class="flex gap-2 flex-wrap">
+                    <button
+                      v-for="preset in presetColors"
+                      :key="preset.value"
+                      @click="frameStyleEdit.color = preset.value; showColorPicker = false"
+                      type="button"
+                      class="flex items-center gap-2 px-2 py-1 rounded border-2 transition text-xs"
+                      :class="frameStyleEdit.color === preset.value && !showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+                    >
+                      <span
+                        class="w-4 h-4 rounded-full border border-gray-500"
+                        :style="{ backgroundColor: preset.value }"
+                      ></span>
+                      <span>{{ preset.label }}</span>
+                    </button>
+                    <button
+                      @click="showColorPicker = !showColorPicker"
+                      type="button"
+                      class="flex items-center gap-2 px-2 py-1 rounded border-2 transition text-xs"
+                      :class="showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+                    >
+                      <span
+                        class="w-4 h-4 rounded-full border border-gray-500"
+                        :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
+                      ></span>
+                      <span>Custom</span>
+                    </button>
+                  </div>
+                  <div v-if="showColorPicker" class="mt-2">
+                    <input
+                      type="color"
+                      v-model="frameStyleEdit.color"
+                      class="w-full h-8 rounded cursor-pointer bg-transparent border border-gray-600"
+                    />
+                  </div>
+                </div>
+
                 <div class="flex gap-2">
                   <button
                     @click="saveFrameDimensions"

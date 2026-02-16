@@ -33,8 +33,7 @@ const savingWall = ref(false)
 // Frame property editing state
 const editingFrameDimensions = ref(false)
 const frameDimensionEdit = ref({ width: 0, height: 0, unit: 'cm' })
-const editingFrameColor = ref(false)
-const frameColorEdit = ref('#000000')
+const frameStyleEdit = ref({ color: '#000000', thickness: 1 })
 const savingFrameEdit = ref(false)
 
 // Frame color presets
@@ -448,6 +447,12 @@ const startEditFrameDimensions = () => {
     height: selectedFrame.value.dimensions?.cm?.height || 0,
     unit: 'cm'
   }
+  // Load frame styling
+  frameStyleEdit.value = {
+    color: selectedFrame.value.styling?.frame_color || '#000000',
+    thickness: selectedFrame.value.styling?.frame_thickness || 1
+  }
+  showCustomColorPicker.value = false
   editingFrameDimensions.value = true
 }
 
@@ -462,9 +467,12 @@ const saveFrameDimensions = async () => {
     await picturesStore.updateFrame(selectedPicture.value.id, selectedFrame.value.id, {
       width: frameDimensionEdit.value.width,
       height: frameDimensionEdit.value.height,
-      unit: frameDimensionEdit.value.unit
+      unit: frameDimensionEdit.value.unit,
+      frame_color: frameStyleEdit.value.color,
+      frame_thickness: frameStyleEdit.value.thickness
     })
     editingFrameDimensions.value = false
+    showCustomColorPicker.value = false
     await picturesStore.fetchPictures()
   } catch (err) {
     console.error('Failed to update frame dimensions:', err)
@@ -474,34 +482,6 @@ const saveFrameDimensions = async () => {
   }
 }
 
-// Frame color editing
-const startEditFrameColor = () => {
-  if (!selectedFrame.value) return
-  frameColorEdit.value = selectedFrame.value.styling?.frame_color || '#000000'
-  showCustomColorPicker.value = false
-  editingFrameColor.value = true
-}
-
-const cancelEditFrameColor = () => {
-  editingFrameColor.value = false
-}
-
-const saveFrameColor = async () => {
-  if (!selectedFrame.value || !selectedPicture.value) return
-  savingFrameEdit.value = true
-  try {
-    await picturesStore.updateFrame(selectedPicture.value.id, selectedFrame.value.id, {
-      frame_color: frameColorEdit.value
-    })
-    editingFrameColor.value = false
-    await picturesStore.fetchPictures()
-  } catch (err) {
-    console.error('Failed to update frame color:', err)
-    error.value = 'Failed to update frame color'
-  } finally {
-    savingFrameEdit.value = false
-  }
-}
 
 // Recrop functionality
 const startRecrop = () => {
@@ -943,10 +923,10 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
 
-        <!-- Frame dimensions -->
+        <!-- Frame Properties (Dimensions, Thickness, Color) -->
         <div class="mb-4">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold">Dimensions</h3>
+            <h3 class="font-semibold">Frame Properties</h3>
             <button
               v-if="!editingFrameDimensions"
               @click="startEditFrameDimensions"
@@ -956,14 +936,30 @@ const getFrameDimensions = (frame) => {
             </button>
           </div>
           <!-- Display mode -->
-          <div v-if="!editingFrameDimensions">
-            <p class="text-sm text-gray-400">
-              {{ selectedFrame.dimensions?.inches?.width?.toFixed(1) }}" x {{ selectedFrame.dimensions?.inches?.height?.toFixed(1) }}"
-              ({{ selectedFrame.dimensions?.cm?.width?.toFixed(1) }} x {{ selectedFrame.dimensions?.cm?.height?.toFixed(1) }} cm)
-            </p>
+          <div v-if="!editingFrameDimensions" class="space-y-2">
+            <div>
+              <span class="text-xs text-gray-400">Dimensions:</span>
+              <p class="text-sm text-gray-300">
+                {{ selectedFrame.dimensions?.inches?.width?.toFixed(1) }}" x {{ selectedFrame.dimensions?.inches?.height?.toFixed(1) }}"
+                ({{ selectedFrame.dimensions?.cm?.width?.toFixed(1) }} x {{ selectedFrame.dimensions?.cm?.height?.toFixed(1) }} cm)
+              </p>
+            </div>
+            <div>
+              <span class="text-xs text-gray-400">Thickness:</span>
+              <p class="text-sm text-gray-300">{{ selectedFrame.styling?.frame_thickness || 1 }}"</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-400">Color:</span>
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500 inline-block"
+                :style="{ backgroundColor: selectedFrame.styling?.frame_color || '#8B4513' }"
+              ></span>
+              <span class="text-sm text-gray-300">{{ selectedFrame.styling?.frame_color || '#8B4513' }}</span>
+            </div>
           </div>
           <!-- Edit mode -->
           <div v-else class="bg-dark-300 rounded-lg p-3 space-y-3">
+            <!-- Dimensions -->
             <div class="flex gap-2 items-end">
               <div>
                 <label class="block text-xs text-gray-400 mb-1">Width</label>
@@ -994,6 +990,60 @@ const getFrameDimensions = (frame) => {
                 <option value="inches">inches</option>
               </select>
             </div>
+
+            <!-- Frame Thickness -->
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Frame Thickness (inches)</label>
+              <input
+                v-model.number="frameStyleEdit.thickness"
+                type="number"
+                min="0.25"
+                max="5"
+                step="0.25"
+                class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+              />
+            </div>
+
+            <!-- Frame Color -->
+            <div>
+              <label class="block text-xs text-gray-400 mb-2">Frame Color</label>
+              <div class="flex gap-2 flex-wrap">
+                <button
+                  v-for="preset in presetColors"
+                  :key="preset.value"
+                  @click="frameStyleEdit.color = preset.value; showCustomColorPicker = false"
+                  type="button"
+                  class="flex items-center gap-2 px-2 py-1 rounded border-2 transition text-xs"
+                  :class="frameStyleEdit.color === preset.value && !showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+                >
+                  <span
+                    class="w-4 h-4 rounded-full border border-gray-500"
+                    :style="{ backgroundColor: preset.value }"
+                  ></span>
+                  <span>{{ preset.label }}</span>
+                </button>
+                <button
+                  @click="showCustomColorPicker = !showCustomColorPicker"
+                  type="button"
+                  class="flex items-center gap-2 px-2 py-1 rounded border-2 transition text-xs"
+                  :class="showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+                >
+                  <span
+                    class="w-4 h-4 rounded-full border border-gray-500"
+                    :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
+                  ></span>
+                  <span>Custom</span>
+                </button>
+              </div>
+              <div v-if="showCustomColorPicker" class="mt-2">
+                <input
+                  type="color"
+                  v-model="frameStyleEdit.color"
+                  class="w-full h-8 rounded cursor-pointer bg-transparent border border-gray-600"
+                />
+              </div>
+            </div>
+
             <div class="flex gap-2">
               <button
                 @click="saveFrameDimensions"
@@ -1004,79 +1054,6 @@ const getFrameDimensions = (frame) => {
               </button>
               <button
                 @click="cancelEditFrameDimensions"
-                class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Frame color -->
-        <div class="mb-4">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold">Frame Color</h3>
-            <button
-              v-if="!editingFrameColor"
-              @click="startEditFrameColor"
-              class="text-gray-400 hover:text-primary-400 text-sm"
-            >
-              Edit
-            </button>
-          </div>
-          <!-- Display mode -->
-          <div v-if="!editingFrameColor" class="flex items-center gap-2">
-            <span
-              class="w-5 h-5 rounded-full border border-gray-500 inline-block"
-              :style="{ backgroundColor: selectedFrame.styling?.frame_color || '#8B4513' }"
-            ></span>
-            <span class="text-sm text-gray-400">{{ selectedFrame.styling?.frame_color || '#8B4513' }}</span>
-          </div>
-          <!-- Edit mode -->
-          <div v-else class="bg-dark-300 rounded-lg p-3 space-y-3">
-            <div class="flex gap-2 flex-wrap">
-              <button
-                v-for="preset in presetColors"
-                :key="preset.value"
-                @click="frameColorEdit = preset.value; showCustomColorPicker = false"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
-                :class="frameColorEdit === preset.value && !showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
-              >
-                <span
-                  class="w-5 h-5 rounded-full border border-gray-500"
-                  :style="{ backgroundColor: preset.value }"
-                ></span>
-                <span class="text-sm">{{ preset.label }}</span>
-              </button>
-              <button
-                @click="showCustomColorPicker = !showCustomColorPicker"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
-                :class="showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
-              >
-                <span
-                  class="w-5 h-5 rounded-full border border-gray-500"
-                  :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
-                ></span>
-                <span class="text-sm">Custom</span>
-              </button>
-            </div>
-            <div v-if="showCustomColorPicker">
-              <input
-                type="color"
-                v-model="frameColorEdit"
-                class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
-              />
-            </div>
-            <div class="flex gap-2">
-              <button
-                @click="saveFrameColor"
-                :disabled="savingFrameEdit"
-                class="px-3 py-1 bg-primary-600 hover:bg-primary-700 rounded text-sm"
-              >
-                {{ savingFrameEdit ? 'Saving...' : 'Save' }}
-              </button>
-              <button
-                @click="cancelEditFrameColor"
                 class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
               >
                 Cancel
