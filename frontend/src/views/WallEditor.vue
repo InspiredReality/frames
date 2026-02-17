@@ -129,24 +129,9 @@ const removeFrame = async (placementIndex) => {
   try {
     saving.value = true
     const placements = [...(wall.value.frame_placements || [])]
-    const removedPlacement = placements[placementIndex]
     placements.splice(placementIndex, 1)
 
-    // Update wall's frame_placements
     await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
-
-    // Also update the picture's wall_id to null to keep data in sync
-    if (removedPlacement?.picture_id) {
-      await picturesStore.updatePicture(removedPlacement.picture_id, { wall_id: null })
-    } else if (removedPlacement?.frame_id) {
-      // Find picture by frame_id if picture_id is not available
-      const picture = picturesStore.pictures.find(p =>
-        p.frames?.some(f => f.id === removedPlacement.frame_id)
-      )
-      if (picture) {
-        await picturesStore.updatePicture(picture.id, { wall_id: null })
-      }
-    }
   } catch (err) {
     error.value = 'Failed to remove frame'
   } finally {
