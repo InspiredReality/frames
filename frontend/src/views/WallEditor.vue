@@ -214,6 +214,7 @@ const savePosition = async () => {
 
     await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
     savedPosition.value = { ...editingPosition.value }
+    closeFrameEditor()
   } catch (err) {
     console.error('Failed to update position:', err)
     error.value = 'Failed to update position'
