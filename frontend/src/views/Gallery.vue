@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { usePicturesStore } from '@/store/pictures'
 import { useWallsStore } from '@/store/walls'
 import { getUploadUrl } from '@/services/api'
@@ -34,6 +34,15 @@ const effectiveAspectRatio = computed(() => {
   return lockAspectRatio.value ? recropAspectRatio.value : null
 })
 
+// Lock body scroll when any modal is open (prevents background scrolling on mobile)
+const isAnyModalOpen = computed(() => {
+  return !!(selectedFrame.value || selectedWall.value || showRecropModal.value)
+})
+
+watch(isAnyModalOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
+
 onMounted(async () => {
   try {
     await Promise.all([
@@ -43,6 +52,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = ''
 })
 
 const filteredItems = computed(() => {

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WallViewer from '@/components/WallViewer.vue'
 import FramePreview2D from '@/components/FramePreview2D.vue'
@@ -56,6 +56,15 @@ const effectiveAspectRatio = computed(() => {
   return lockAspectRatio.value ? recropAspectRatio.value : null
 })
 
+// Lock body scroll when any modal is open (prevents background scrolling on mobile)
+const isAnyModalOpen = computed(() => {
+  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value)
+})
+
+watch(isAnyModalOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
+
 onMounted(async () => {
   try {
     await Promise.all([
@@ -67,6 +76,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = ''
 })
 
 const wall = computed(() => wallsStore.currentWall)
