@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WallViewer from '@/components/WallViewer.vue'
 import FramePreview2D from '@/components/FramePreview2D.vue'
@@ -23,17 +23,17 @@ const selectedPlacementIndex = ref(null)
 const editingPosition = ref({ x: 0, y: 0 })
 const savedPosition = ref({ x: 0, y: 0 })
 const savingPosition = ref(false)
+const positionUnit = ref('cm') // 'cm' or 'ft'
 
 // Wall editing state
 const editingWall = ref(false)
-const wallEdit = ref({ name: '', description: '', width: 0, height: 0 })
+const wallEdit = ref({ name: '', description: '', width: 0, height: 0, unit: 'cm' })
 const savingWall = ref(false)
 
 // Frame property editing state
 const editingFrameDimensions = ref(false)
 const frameDimensionEdit = ref({ width: 0, height: 0, unit: 'cm' })
-const editingFrameColor = ref(false)
-const frameColorEdit = ref('#000000')
+const frameStyleEdit = ref({ color: '#000000', thickness: 1 })
 const savingFrameEdit = ref(false)
 
 // Frame color presets
@@ -180,6 +180,14 @@ const selectFrame = (data) => {
     }
     editingPosition.value = { ...pos }
     savedPosition.value = { ...pos }
+    positionUnit.value = 'cm'
+    // Set initial label modes based on current position
+    const wCm = wall.value?.width_cm || 0
+    const hCm = wall.value?.height_cm || 0
+    const xCm = (wCm / 2) + (pos.x * 100)
+    const yCm = (hCm / 2) + (pos.y * 100)
+    xLabelMode.value = (wCm > 0 && xCm / wCm > 0.6) ? 'right' : 'left'
+    yLabelMode.value = (hCm > 0 && yCm / hCm > 0.6) ? 'ceiling' : 'floor'
   }
 }
 
@@ -213,6 +221,121 @@ const resetPosition = () => {
   editingPosition.value = { ...savedPosition.value }
 }
 
+// Position display: convert internal meters (center-based) to wall-relative measurements
+const wallWidthM = computed(() => (wall.value?.width_cm || 0) * 0.01)
+const wallHeightM = computed(() => (wall.value?.height_cm || 0) * 0.01)
+const wallWidthCmVal = computed(() => wall.value?.width_cm || 0)
+const wallHeightCmVal = computed(() => wall.value?.height_cm || 0)
+
+// "From left" = wallWidth/2 + x (in meters), converted to cm
+const posFromLeftCm = computed({
+  get: () => +((wallWidthM.value / 2 + editingPosition.value.x) * 100).toFixed(1),
+  set: (val) => { editingPosition.value.x = (val / 100) - wallWidthM.value / 2 }
+})
+// "From floor" = wallHeight/2 + y (in meters), converted to cm
+const posFromFloorCm = computed({
+  get: () => +((wallHeightM.value / 2 + editingPosition.value.y) * 100).toFixed(1),
+  set: (val) => { editingPosition.value.y = (val / 100) - wallHeightM.value / 2 }
+})
+
+// Hysteresis-based label modes: flip at 60% going one way, flip back at 40% (60% from other side)
+const xLabelMode = ref('left') // 'left' or 'right'
+const yLabelMode = ref('floor') // 'floor' or 'ceiling'
+
+// Watch position and apply hysteresis thresholds
+watch(posFromLeftCm, (val) => {
+  const w = wallWidthCmVal.value
+  if (w <= 0) return
+  const pct = val / w
+  if (xLabelMode.value === 'left' && pct > 0.6) {
+    xLabelMode.value = 'right'
+  } else if (xLabelMode.value === 'right' && pct < 0.4) {
+    xLabelMode.value = 'left'
+  }
+})
+
+watch(posFromFloorCm, (val) => {
+  const h = wallHeightCmVal.value
+  if (h <= 0) return
+  const pct = val / h
+  if (yLabelMode.value === 'floor' && pct > 0.6) {
+    yLabelMode.value = 'ceiling'
+  } else if (yLabelMode.value === 'ceiling' && pct < 0.4) {
+    yLabelMode.value = 'floor'
+  }
+})
+
+// Display value: distance from the relevant edge in cm
+const xDisplayCm = computed({
+  get: () => xLabelMode.value === 'left' ? posFromLeftCm.value : +(wallWidthCmVal.value - posFromLeftCm.value).toFixed(1),
+  set: (val) => {
+    posFromLeftCm.value = xLabelMode.value === 'left' ? val : +(wallWidthCmVal.value - val).toFixed(1)
+  }
+})
+
+const yDisplayCm = computed({
+  get: () => yLabelMode.value === 'floor' ? posFromFloorCm.value : +(wallHeightCmVal.value - posFromFloorCm.value).toFixed(1),
+  set: (val) => {
+    posFromFloorCm.value = yLabelMode.value === 'floor' ? val : +(wallHeightCmVal.value - val).toFixed(1)
+  }
+})
+
+const xLabel = computed(() => xLabelMode.value === 'left' ? 'from left' : 'from right')
+const yLabel = computed(() => yLabelMode.value === 'floor' ? 'from floor' : 'from ceiling')
+
+const posXFt = ref(0)
+const posXIn = ref(0)
+const posYFt = ref(0)
+const posYIn = ref(0)
+
+const syncFtInFromCm = () => {
+  const xfi = cmToFtIn(Math.max(0, xDisplayCm.value))
+  posXFt.value = xfi.ft
+  posXIn.value = xfi.inches
+  const yfi = cmToFtIn(Math.max(0, yDisplayCm.value))
+  posYFt.value = yfi.ft
+  posYIn.value = yfi.inches
+}
+
+const applyFtInToPosition = (axis) => {
+  if (axis === 'x') {
+    xDisplayCm.value = +ftInToCm(posXFt.value || 0, posXIn.value || 0).toFixed(1)
+  } else {
+    yDisplayCm.value = +ftInToCm(posYFt.value || 0, posYIn.value || 0).toFixed(1)
+  }
+}
+
+const togglePositionUnit = () => {
+  if (positionUnit.value === 'cm') {
+    syncFtInFromCm()
+    positionUnit.value = 'ft'
+  } else {
+    applyFtInToPosition('x')
+    applyFtInToPosition('y')
+    positionUnit.value = 'cm'
+  }
+}
+
+// Format a placement position as human-readable with smart left/right, floor/ceiling
+const formatPlacementPosition = (placement) => {
+  const wCm = wall.value?.width_cm || 0
+  const hCm = wall.value?.height_cm || 0
+  const xCm = (wCm / 2) + ((placement.position?.x || 0) * 100)
+  const yCm = (hCm / 2) + ((placement.position?.y || 0) * 100)
+
+  const useRight = wCm > 0 && (xCm / wCm) > 0.6
+  const useCeiling = hCm > 0 && (yCm / hCm) > 0.6
+
+  const xVal = useRight ? Math.max(0, wCm - xCm) : Math.max(0, xCm)
+  const yVal = useCeiling ? Math.max(0, hCm - yCm) : Math.max(0, yCm)
+  const xFtIn = cmToFtIn(xVal)
+  const yFtIn = cmToFtIn(yVal)
+
+  const xDir = useRight ? 'from right' : 'from left'
+  const yDir = useCeiling ? 'from ceiling' : 'from floor'
+  return `${xFtIn.ft}'${xFtIn.inches}" ${xDir}, ${yFtIn.ft}'${yFtIn.inches}" ${yDir}`
+}
+
 // Handle frame drag-move from 3D viewer
 const onFrameMoved = async (data) => {
   const { placementIndex, position } = data
@@ -234,12 +357,54 @@ const onFrameMoved = async (data) => {
 }
 
 // Wall editing
+const cmToFtIn = (cm) => {
+  const totalInches = cm / 2.54
+  const ft = Math.floor(totalInches / 12)
+  const inches = +(totalInches - ft * 12).toFixed(1)
+  return { ft, inches }
+}
+
+const ftInToCm = (ft, inches) => {
+  return (ft * 12 + inches) * 2.54
+}
+
+const toggleWallUnit = () => {
+  const w = parseFloat(wallEdit.value.width) || 0
+  const h = parseFloat(wallEdit.value.height) || 0
+  if (wallEdit.value.unit === 'cm') {
+    // Convert cm -> ft & in
+    const wFtIn = cmToFtIn(w)
+    const hFtIn = cmToFtIn(h)
+    wallEdit.value.widthFt = wFtIn.ft
+    wallEdit.value.widthIn = wFtIn.inches
+    wallEdit.value.heightFt = hFtIn.ft
+    wallEdit.value.heightIn = hFtIn.inches
+    wallEdit.value.unit = 'ft'
+  } else {
+    // Convert ft & in -> cm
+    wallEdit.value.width = +ftInToCm(
+      parseFloat(wallEdit.value.widthFt) || 0,
+      parseFloat(wallEdit.value.widthIn) || 0
+    ).toFixed(1)
+    wallEdit.value.height = +ftInToCm(
+      parseFloat(wallEdit.value.heightFt) || 0,
+      parseFloat(wallEdit.value.heightIn) || 0
+    ).toFixed(1)
+    wallEdit.value.unit = 'cm'
+  }
+}
+
 const startEditWall = () => {
   wallEdit.value = {
     name: wall.value?.name || '',
     description: wall.value?.description || '',
     width: wall.value?.width_cm || 0,
-    height: wall.value?.height_cm || 0
+    height: wall.value?.height_cm || 0,
+    unit: 'cm',
+    widthFt: 0,
+    widthIn: 0,
+    heightFt: 0,
+    heightIn: 0
   }
   editingWall.value = true
 }
@@ -250,12 +415,20 @@ const cancelEditWall = () => {
 
 const saveWall = async () => {
   savingWall.value = true
+  let widthCm, heightCm
+  if (wallEdit.value.unit === 'ft') {
+    widthCm = ftInToCm(parseFloat(wallEdit.value.widthFt) || 0, parseFloat(wallEdit.value.widthIn) || 0)
+    heightCm = ftInToCm(parseFloat(wallEdit.value.heightFt) || 0, parseFloat(wallEdit.value.heightIn) || 0)
+  } else {
+    widthCm = parseFloat(wallEdit.value.width) || 0
+    heightCm = parseFloat(wallEdit.value.height) || 0
+  }
   try {
     await wallsStore.updateWall(wall.value.id, {
       name: wallEdit.value.name,
       description: wallEdit.value.description,
-      width_cm: parseFloat(wallEdit.value.width) || 0,
-      height_cm: parseFloat(wallEdit.value.height) || 0
+      width_cm: widthCm,
+      height_cm: heightCm
     })
     editingWall.value = false
   } catch (err) {
@@ -269,11 +442,19 @@ const saveWall = async () => {
 // Frame dimension editing
 const startEditFrameDimensions = () => {
   if (!selectedFrame.value) return
+  const unit = 'cm' // Default to cm
   frameDimensionEdit.value = {
     width: selectedFrame.value.dimensions?.cm?.width || 0,
     height: selectedFrame.value.dimensions?.cm?.height || 0,
-    unit: 'cm'
+    unit: unit
   }
+  // Load frame styling (thickness is stored in inches, convert to selected unit)
+  const thicknessInches = selectedFrame.value.styling?.frame_thickness || 1
+  frameStyleEdit.value = {
+    color: selectedFrame.value.styling?.frame_color || '#000000',
+    thickness: unit === 'cm' ? thicknessInches * 2.54 : thicknessInches
+  }
+  showCustomColorPicker.value = false
   editingFrameDimensions.value = true
 }
 
@@ -285,12 +466,20 @@ const saveFrameDimensions = async () => {
   if (!selectedFrame.value || !selectedPicture.value) return
   savingFrameEdit.value = true
   try {
+    // Convert thickness to inches for API (thickness is always stored in inches on backend)
+    const thicknessInches = frameDimensionEdit.value.unit === 'cm'
+      ? frameStyleEdit.value.thickness / 2.54
+      : frameStyleEdit.value.thickness
+
     await picturesStore.updateFrame(selectedPicture.value.id, selectedFrame.value.id, {
       width: frameDimensionEdit.value.width,
       height: frameDimensionEdit.value.height,
-      unit: frameDimensionEdit.value.unit
+      unit: frameDimensionEdit.value.unit,
+      frame_color: frameStyleEdit.value.color,
+      frame_thickness: thicknessInches
     })
     editingFrameDimensions.value = false
+    showCustomColorPicker.value = false
     await picturesStore.fetchPictures()
   } catch (err) {
     console.error('Failed to update frame dimensions:', err)
@@ -300,34 +489,6 @@ const saveFrameDimensions = async () => {
   }
 }
 
-// Frame color editing
-const startEditFrameColor = () => {
-  if (!selectedFrame.value) return
-  frameColorEdit.value = selectedFrame.value.styling?.frame_color || '#000000'
-  showCustomColorPicker.value = false
-  editingFrameColor.value = true
-}
-
-const cancelEditFrameColor = () => {
-  editingFrameColor.value = false
-}
-
-const saveFrameColor = async () => {
-  if (!selectedFrame.value || !selectedPicture.value) return
-  savingFrameEdit.value = true
-  try {
-    await picturesStore.updateFrame(selectedPicture.value.id, selectedFrame.value.id, {
-      frame_color: frameColorEdit.value
-    })
-    editingFrameColor.value = false
-    await picturesStore.fetchPictures()
-  } catch (err) {
-    console.error('Failed to update frame color:', err)
-    error.value = 'Failed to update frame color'
-  } finally {
-    savingFrameEdit.value = false
-  }
-}
 
 // Recrop functionality
 const startRecrop = () => {
@@ -423,13 +584,30 @@ const closeFrameEditor = () => {
 // Get frame dimensions for preview
 const getFrameDimensions = (frame) => {
   if (frame?.dimensions?.cm) {
+    // Use editing values if currently editing this frame
+    if (editingFrameDimensions.value && frame.id === selectedFrame.value?.id) {
+      return {
+        widthCm: frameDimensionEdit.value.unit === 'cm'
+          ? frameDimensionEdit.value.width
+          : frameDimensionEdit.value.width * 2.54,
+        heightCm: frameDimensionEdit.value.unit === 'cm'
+          ? frameDimensionEdit.value.height
+          : frameDimensionEdit.value.height * 2.54,
+        frameColor: frameStyleEdit.value.color,
+        frameThickness: frameDimensionEdit.value.unit === 'cm'
+          ? frameStyleEdit.value.thickness / 2.54
+          : frameStyleEdit.value.thickness
+      }
+    }
+
     return {
       widthCm: frame.dimensions.cm.width || 20,
       heightCm: frame.dimensions.cm.height || 25,
-      frameColor: frame.styling?.frame_color || '#8B4513'
+      frameColor: frame.styling?.frame_color || '#8B4513',
+      frameThickness: frame.styling?.frame_thickness || 1
     }
   }
-  return { widthCm: 20, heightCm: 25, frameColor: '#8B4513' }
+  return { widthCm: 20, heightCm: 25, frameColor: '#8B4513', frameThickness: 1 }
 }
 </script>
 
@@ -523,7 +701,25 @@ const getFrameDimensions = (frame) => {
               class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm resize-none"
             ></textarea>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-sm text-gray-400">Unit:</span>
+            <button
+              @click="toggleWallUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="wallEdit.unit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              cm
+            </button>
+            <button
+              @click="toggleWallUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="wallEdit.unit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              ft &amp; in
+            </button>
+          </div>
+          <!-- cm inputs -->
+          <div v-if="wallEdit.unit === 'cm'" class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm text-gray-400 mb-1">Width (cm)</label>
               <input
@@ -543,6 +739,59 @@ const getFrameDimensions = (frame) => {
                 min="0"
                 class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
               />
+            </div>
+          </div>
+          <!-- ft & in inputs -->
+          <div v-else class="space-y-3">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Width</label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.widthFt"
+                    min="0"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">ft</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.widthIn"
+                    step="0.1"
+                    min="0"
+                    max="11.9"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">in</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Height</label>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.heightFt"
+                    min="0"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">ft</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="wallEdit.heightIn"
+                    step="0.1"
+                    min="0"
+                    max="11.9"
+                    class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-sm text-gray-400">in</span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="flex gap-3">
@@ -591,7 +840,7 @@ const getFrameDimensions = (frame) => {
                   {{ allFrames.find(f => f.id === placement.frame_id)?.pictureName || 'Unknown' }}
                 </p>
                 <p class="text-sm text-gray-400">
-                  Position: ({{ placement.position?.x?.toFixed(2) }}, {{ placement.position?.y?.toFixed(2) }})
+                  {{ formatPlacementPosition(placement) }}
                 </p>
               </div>
             </div>
@@ -680,6 +929,7 @@ const getFrameDimensions = (frame) => {
             :widthCm="getFrameDimensions(selectedFrame).widthCm"
             :heightCm="getFrameDimensions(selectedFrame).heightCm"
             :frameColor="getFrameDimensions(selectedFrame).frameColor"
+            :frameThickness="getFrameDimensions(selectedFrame).frameThickness"
             :maxWidth="300"
             :maxHeight="300"
           />
@@ -698,10 +948,10 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
 
-        <!-- Frame dimensions -->
+        <!-- Frame Properties (Dimensions, Thickness, Color) -->
         <div class="mb-4">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold">Dimensions</h3>
+            <h3 class="font-semibold">Frame Properties</h3>
             <button
               v-if="!editingFrameDimensions"
               @click="startEditFrameDimensions"
@@ -711,14 +961,30 @@ const getFrameDimensions = (frame) => {
             </button>
           </div>
           <!-- Display mode -->
-          <div v-if="!editingFrameDimensions">
-            <p class="text-sm text-gray-400">
-              {{ selectedFrame.dimensions?.inches?.width?.toFixed(1) }}" x {{ selectedFrame.dimensions?.inches?.height?.toFixed(1) }}"
-              ({{ selectedFrame.dimensions?.cm?.width?.toFixed(1) }} x {{ selectedFrame.dimensions?.cm?.height?.toFixed(1) }} cm)
-            </p>
+          <div v-if="!editingFrameDimensions" class="space-y-2">
+            <div>
+              <span class="text-xs text-gray-400">Dimensions:</span>
+              <p class="text-sm text-gray-300">
+                {{ selectedFrame.dimensions?.inches?.width?.toFixed(1) }}" x {{ selectedFrame.dimensions?.inches?.height?.toFixed(1) }}"
+                ({{ selectedFrame.dimensions?.cm?.width?.toFixed(1) }} x {{ selectedFrame.dimensions?.cm?.height?.toFixed(1) }} cm)
+              </p>
+            </div>
+            <div>
+              <span class="text-xs text-gray-400">Thickness:</span>
+              <p class="text-sm text-gray-300">{{ selectedFrame.styling?.frame_thickness || 1 }}"</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-400">Color:</span>
+              <span
+                class="w-5 h-5 rounded-full border border-gray-500 inline-block"
+                :style="{ backgroundColor: selectedFrame.styling?.frame_color || '#8B4513' }"
+              ></span>
+              <span class="text-sm text-gray-300">{{ selectedFrame.styling?.frame_color || '#8B4513' }}</span>
+            </div>
           </div>
           <!-- Edit mode -->
           <div v-else class="bg-dark-300 rounded-lg p-3 space-y-3">
+            <!-- Dimensions -->
             <div class="flex gap-2 items-end">
               <div>
                 <label class="block text-xs text-gray-400 mb-1">Width</label>
@@ -749,6 +1015,62 @@ const getFrameDimensions = (frame) => {
                 <option value="inches">inches</option>
               </select>
             </div>
+
+            <!-- Frame Thickness -->
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">
+                Frame Thickness ({{ frameDimensionEdit.unit }})
+              </label>
+              <input
+                v-model.number="frameStyleEdit.thickness"
+                type="number"
+                :min="frameDimensionEdit.unit === 'cm' ? 0.6 : 0.25"
+                :max="frameDimensionEdit.unit === 'cm' ? 12.7 : 5"
+                :step="frameDimensionEdit.unit === 'cm' ? 0.1 : 0.25"
+                class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+              />
+            </div>
+
+            <!-- Frame Color -->
+            <div>
+              <label class="block text-xs text-gray-400 mb-2">Frame Color</label>
+              <div class="flex gap-2 flex-wrap">
+                <button
+                  v-for="preset in presetColors"
+                  :key="preset.value"
+                  @click="frameStyleEdit.color = preset.value; showCustomColorPicker = false"
+                  type="button"
+                  class="flex items-center gap-2 px-2 py-1 rounded border-2 transition text-xs"
+                  :class="frameStyleEdit.color === preset.value && !showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+                >
+                  <span
+                    class="w-4 h-4 rounded-full border border-gray-500"
+                    :style="{ backgroundColor: preset.value }"
+                  ></span>
+                  <span>{{ preset.label }}</span>
+                </button>
+                <button
+                  @click="showCustomColorPicker = !showCustomColorPicker"
+                  type="button"
+                  class="flex items-center gap-2 px-2 py-1 rounded border-2 transition text-xs"
+                  :class="showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+                >
+                  <span
+                    class="w-4 h-4 rounded-full border border-gray-500"
+                    :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
+                  ></span>
+                  <span>Custom</span>
+                </button>
+              </div>
+              <div v-if="showCustomColorPicker" class="mt-2">
+                <input
+                  type="color"
+                  v-model="frameStyleEdit.color"
+                  class="w-full h-8 rounded cursor-pointer bg-transparent border border-gray-600"
+                />
+              </div>
+            </div>
+
             <div class="flex gap-2">
               <button
                 @click="saveFrameDimensions"
@@ -767,135 +1089,158 @@ const getFrameDimensions = (frame) => {
           </div>
         </div>
 
-        <!-- Frame color -->
-        <div class="mb-4">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold">Frame Color</h3>
-            <button
-              v-if="!editingFrameColor"
-              @click="startEditFrameColor"
-              class="text-gray-400 hover:text-primary-400 text-sm"
-            >
-              Edit
-            </button>
-          </div>
-          <!-- Display mode -->
-          <div v-if="!editingFrameColor" class="flex items-center gap-2">
-            <span
-              class="w-5 h-5 rounded-full border border-gray-500 inline-block"
-              :style="{ backgroundColor: selectedFrame.styling?.frame_color || '#8B4513' }"
-            ></span>
-            <span class="text-sm text-gray-400">{{ selectedFrame.styling?.frame_color || '#8B4513' }}</span>
-          </div>
-          <!-- Edit mode -->
-          <div v-else class="bg-dark-300 rounded-lg p-3 space-y-3">
-            <div class="flex gap-2 flex-wrap">
-              <button
-                v-for="preset in presetColors"
-                :key="preset.value"
-                @click="frameColorEdit = preset.value; showCustomColorPicker = false"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
-                :class="frameColorEdit === preset.value && !showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
-              >
-                <span
-                  class="w-5 h-5 rounded-full border border-gray-500"
-                  :style="{ backgroundColor: preset.value }"
-                ></span>
-                <span class="text-sm">{{ preset.label }}</span>
-              </button>
-              <button
-                @click="showCustomColorPicker = !showCustomColorPicker"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
-                :class="showCustomColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
-              >
-                <span
-                  class="w-5 h-5 rounded-full border border-gray-500"
-                  :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
-                ></span>
-                <span class="text-sm">Custom</span>
-              </button>
-            </div>
-            <div v-if="showCustomColorPicker">
-              <input
-                type="color"
-                v-model="frameColorEdit"
-                class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
-              />
-            </div>
-            <div class="flex gap-2">
-              <button
-                @click="saveFrameColor"
-                :disabled="savingFrameEdit"
-                class="px-3 py-1 bg-primary-600 hover:bg-primary-700 rounded text-sm"
-              >
-                {{ savingFrameEdit ? 'Saving...' : 'Save' }}
-              </button>
-              <button
-                @click="cancelEditFrameColor"
-                class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-
         <!-- Position editing -->
         <div class="mb-4">
           <h3 class="font-semibold mb-2">Position on Wall</h3>
-          <p class="text-sm text-gray-400 mb-3">Adjust the X and Y position of the frame</p>
+          <p class="text-sm text-gray-400 mb-3">Distance from wall edges</p>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">X Position</label>
-              <input
-                type="range"
-                v-model.number="editingPosition.x"
-                min="-3"
-                max="3"
-                step="0.1"
-                class="w-full"
-              />
-              <input
-                type="number"
-                v-model.number="editingPosition.x"
-                step="0.1"
-                class="w-full mt-1 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-              />
-            </div>
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Y Position</label>
-              <input
-                type="range"
-                v-model.number="editingPosition.y"
-                min="-2"
-                max="2"
-                step="0.1"
-                class="w-full"
-              />
-              <input
-                type="number"
-                v-model.number="editingPosition.y"
-                step="0.1"
-                class="w-full mt-1 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-              />
-            </div>
+          <!-- Unit toggle -->
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-sm text-gray-400">Unit:</span>
+            <button
+              @click="togglePositionUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="positionUnit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              cm
+            </button>
+            <button
+              @click="togglePositionUnit"
+              class="px-3 py-1 rounded text-xs font-medium transition"
+              :class="positionUnit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+            >
+              ft &amp; in
+            </button>
           </div>
-          <div class="flex gap-3 mt-3">
-            <button
-              @click="resetPosition"
-              :disabled="editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y"
-              class="btn btn-secondary flex-1 text-sm"
-            >
-              Reset
-            </button>
-            <button
-              @click="savePosition"
-              :disabled="savingPosition || (editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y)"
-              class="btn btn-primary flex-1 text-sm"
-            >
-              {{ savingPosition ? 'Saving...' : 'Save Position' }}
-            </button>
+
+          <div class="flex gap-4">
+            <!-- Left column: X slider + buttons -->
+            <div class="flex-1">
+              <!-- X Position (horizontal slider) -->
+              <div class="mb-3">
+                <label class="block text-sm text-gray-400 mb-1">X Position <span class="text-gray-500">({{ xLabel }})</span></label>
+                <input
+                  type="range"
+                  v-model.number="posFromLeftCm"
+                  :min="0"
+                  :max="wall?.width_cm || 300"
+                  step="0.5"
+                  class="w-full"
+                  @input="positionUnit === 'ft' && syncFtInFromCm()"
+                />
+                <!-- cm input -->
+                <div v-if="positionUnit === 'cm'" class="mt-1">
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      v-model.number="xDisplayCm"
+                      step="0.1"
+                      min="0"
+                      class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400 whitespace-nowrap">cm {{ xLabel }}</span>
+                  </div>
+                </div>
+                <!-- ft & in input -->
+                <div v-else class="mt-1 flex items-center gap-1">
+                  <input
+                    type="number"
+                    v-model.number="posXFt"
+                    min="0"
+                    @input="applyFtInToPosition('x')"
+                    class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-xs text-gray-400">ft</span>
+                  <input
+                    type="number"
+                    v-model.number="posXIn"
+                    step="0.1"
+                    min="0"
+                    max="11.9"
+                    @input="applyFtInToPosition('x')"
+                    class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                  />
+                  <span class="text-xs text-gray-400 whitespace-nowrap">in {{ xLabel }}</span>
+                </div>
+              </div>
+
+              <!-- Buttons stacked -->
+              <div class="space-y-2 mt-3">
+                <button
+                  @click="resetPosition"
+                  :disabled="editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y"
+                  class="btn btn-secondary w-full text-sm"
+                >
+                  Reset
+                </button>
+                <button
+                  @click="savePosition"
+                  :disabled="savingPosition || (editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y)"
+                  class="btn btn-primary w-full text-sm"
+                >
+                  {{ savingPosition ? 'Saving...' : 'Save Position' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Right column: Y slider (vertical) + input -->
+            <div class="flex flex-col items-center" style="width: 120px;">
+              <label class="block text-sm text-gray-400 mb-1">Y Position <span class="text-gray-500">({{ yLabel }})</span></label>
+              <div class="flex items-stretch gap-2 flex-1">
+                <!-- Vertical slider -->
+                <div class="flex items-center" style="height: 180px;">
+                  <input
+                    type="range"
+                    v-model.number="posFromFloorCm"
+                    :min="0"
+                    :max="wall?.height_cm || 300"
+                    step="0.5"
+                    class="vertical-slider"
+                    style="width: 180px; transform: rotate(-90deg); transform-origin: center center;"
+                    @input="positionUnit === 'ft' && syncFtInFromCm()"
+                  />
+                </div>
+                <!-- Input beside slider -->
+                <div class="flex flex-col justify-center">
+                  <template v-if="positionUnit === 'cm'">
+                    <input
+                      type="number"
+                      v-model.number="yDisplayCm"
+                      step="0.1"
+                      min="0"
+                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400 text-center mt-1">cm</span>
+                  </template>
+                  <template v-else>
+                    <div class="space-y-1">
+                      <div class="flex items-center gap-1">
+                        <input
+                          type="number"
+                          v-model.number="posYFt"
+                          min="0"
+                          @input="applyFtInToPosition('y')"
+                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                        />
+                        <span class="text-xs text-gray-400">ft</span>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <input
+                          type="number"
+                          v-model.number="posYIn"
+                          step="0.1"
+                          min="0"
+                          max="11.9"
+                          @input="applyFtInToPosition('y')"
+                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                        />
+                        <span class="text-xs text-gray-400">in</span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -916,9 +1261,9 @@ const getFrameDimensions = (frame) => {
       class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[60]"
       @click.self="cancelRecrop"
     >
-      <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold">Recrop Image</h2>
+      <div class="card max-w-5xl w-full max-h-[95vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold">Recrop Image</h2>
           <button @click="cancelRecrop" class="text-gray-400 hover:text-white">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -926,7 +1271,11 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
 
-        <div class="mb-4">
+        <p class="text-sm text-gray-400 mb-4">
+          Drag the corners or edges to select the area you want to keep
+        </p>
+
+        <div class="mb-6">
           <ImageCropper
             :key="effectiveAspectRatio"
             :imageUrl="recropImageUrl"
@@ -935,12 +1284,12 @@ const getFrameDimensions = (frame) => {
           />
         </div>
 
-        <div v-if="recropAspectRatio" class="mb-4 flex items-center gap-2">
+        <div v-if="recropAspectRatio" class="mb-6 flex items-center gap-2 bg-dark-300 rounded-lg p-3">
           <input
             type="checkbox"
             id="lockAspectRatioWall"
             v-model="lockAspectRatio"
-            class="w-4 h-4 rounded border-gray-600 bg-dark-300 text-primary-500 focus:ring-primary-500"
+            class="w-4 h-4 rounded border-gray-600 bg-dark-100 text-primary-500 focus:ring-primary-500"
           />
           <label for="lockAspectRatioWall" class="text-sm text-gray-300">
             Lock to current frame ratio ({{ recropAspectRatio?.toFixed(2) }})

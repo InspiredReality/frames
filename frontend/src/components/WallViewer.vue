@@ -31,6 +31,7 @@ let scene, camera, renderer, controls, wallMesh, animationId, raycaster, mouse
 let dragPlane, dragOffset, draggedFrame, isDragging
 const frameObjects = new Map()
 const textureLoader = new THREE.TextureLoader()
+textureLoader.crossOrigin = 'anonymous'
 
 const initScene = () => {
   if (!containerRef.value) return
@@ -201,8 +202,9 @@ const createWall = () => {
 
   let material
   if (props.wallImageUrl) {
-    const textureLoader = new THREE.TextureLoader()
-    const texture = textureLoader.load(props.wallImageUrl)
+    const wallTextureLoader = new THREE.TextureLoader()
+    wallTextureLoader.crossOrigin = 'anonymous'
+    const texture = wallTextureLoader.load(props.wallImageUrl)
     texture.colorSpace = THREE.SRGBColorSpace
     material = new THREE.MeshStandardMaterial({
       map: texture,
@@ -297,12 +299,23 @@ const updateFrames = () => {
     let pictureMaterial
 
     if (imageUrl) {
-      const texture = textureLoader.load(imageUrl)
-      texture.colorSpace = THREE.SRGBColorSpace
       pictureMaterial = new THREE.MeshStandardMaterial({
-        map: texture,
+        color: 0x333333,
         side: THREE.FrontSide
       })
+      textureLoader.load(
+        imageUrl,
+        (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace
+          pictureMaterial.map = texture
+          pictureMaterial.color.set(0xffffff)
+          pictureMaterial.needsUpdate = true
+        },
+        undefined,
+        (err) => {
+          console.error('Failed to load frame texture:', imageUrl, err)
+        }
+      )
     } else {
       pictureMaterial = new THREE.MeshStandardMaterial({
         color: 0xcccccc,

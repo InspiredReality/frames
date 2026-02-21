@@ -75,6 +75,12 @@ class PictureFrame(Base):
     height_cm = Column(Float, nullable=False)
     depth_cm = Column(Float, default=2.54)
 
+    # Total dimensions (picture + frame border)
+    total_width_inches = Column(Float)
+    total_height_inches = Column(Float)
+    total_width_cm = Column(Float)
+    total_height_cm = Column(Float)
+
     # Frame styling
     frame_color = Column(String(7), default='#8B4513')  # Brown default
     frame_material = Column(String(50), default='wood')
@@ -90,7 +96,7 @@ class PictureFrame(Base):
 
     INCHES_TO_CM = 2.54
 
-    def set_dimensions_inches(self, width, height, depth=1.0):
+    def set_dimensions_inches(self, width, height, depth=1.0, total_width=None, total_height=None):
         """Set dimensions in inches and auto-calculate cm."""
         self.width_inches = width
         self.height_inches = height
@@ -98,8 +104,14 @@ class PictureFrame(Base):
         self.width_cm = width * self.INCHES_TO_CM
         self.height_cm = height * self.INCHES_TO_CM
         self.depth_cm = depth * self.INCHES_TO_CM
+        if total_width is not None:
+            self.total_width_inches = total_width
+            self.total_width_cm = total_width * self.INCHES_TO_CM
+        if total_height is not None:
+            self.total_height_inches = total_height
+            self.total_height_cm = total_height * self.INCHES_TO_CM
 
-    def set_dimensions_cm(self, width, height, depth=2.54):
+    def set_dimensions_cm(self, width, height, depth=2.54, total_width=None, total_height=None):
         """Set dimensions in cm and auto-calculate inches."""
         self.width_cm = width
         self.height_cm = height
@@ -107,6 +119,12 @@ class PictureFrame(Base):
         self.width_inches = width / self.INCHES_TO_CM
         self.height_inches = height / self.INCHES_TO_CM
         self.depth_inches = depth / self.INCHES_TO_CM
+        if total_width is not None:
+            self.total_width_cm = total_width
+            self.total_width_inches = total_width / self.INCHES_TO_CM
+        if total_height is not None:
+            self.total_height_cm = total_height
+            self.total_height_inches = total_height / self.INCHES_TO_CM
 
     def to_dict(self):
         """Serialize frame to dictionary."""
@@ -118,12 +136,16 @@ class PictureFrame(Base):
                 'inches': {
                     'width': self.width_inches,
                     'height': self.height_inches,
-                    'depth': self.depth_inches
+                    'depth': self.depth_inches,
+                    'total_width': self.total_width_inches,
+                    'total_height': self.total_height_inches
                 },
                 'cm': {
                     'width': self.width_cm,
                     'height': self.height_cm,
-                    'depth': self.depth_cm
+                    'depth': self.depth_cm,
+                    'total_width': self.total_width_cm,
+                    'total_height': self.total_height_cm
                 }
             },
             'styling': {
