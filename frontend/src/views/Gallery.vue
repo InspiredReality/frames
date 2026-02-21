@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { usePicturesStore } from '@/store/pictures'
 import { useWallsStore } from '@/store/walls'
 import { getUploadUrl } from '@/services/api'
@@ -45,6 +45,15 @@ const effectiveAspectRatio = computed(() => {
   return lockAspectRatio.value ? recropAspectRatio.value : null
 })
 
+// Lock body scroll when any modal is open (prevents background scrolling on mobile)
+const isAnyModalOpen = computed(() => {
+  return !!(selectedFrame.value || selectedWall.value || showRecropModal.value)
+})
+
+watch(isAnyModalOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
+
 onMounted(async () => {
   try {
     await Promise.all([
@@ -54,6 +63,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = ''
 })
 
 const filteredItems = computed(() => {
@@ -132,6 +145,32 @@ const getWallFrameCount = (wall) => {
   return wall.frame_placements?.length || 0
 }
 
+// Check if a frame/picture is placed on a specific wall
+const isFrameOnWall = (picture, wallId) => {
+  const wall = wallsStore.walls.find(w => w.id === wallId)
+  if (!wall?.frame_placements?.length) return false
+  const frameId = picture.frames?.[0]?.id
+  return wall.frame_placements.some(p => p.frame_id === frameId || p.picture_id === picture.id)
+}
+
+// Get all wall IDs a frame/picture is placed on
+const getFrameWallIds = (picture) => {
+  if (!picture?.frames?.length) return []
+  const frameId = picture.frames[0].id
+  return wallsStore.walls
+    .filter(w => w.frame_placements?.some(p => p.frame_id === frameId || p.picture_id === picture.id))
+    .map(w => w.id)
+}
+
+// Toggle frame on/off a wall
+const toggleFrameOnWall = async (picture, wallId) => {
+  if (isFrameOnWall(picture, wallId)) {
+    await removeFrameFromWall(picture.id, wallId)
+  } else {
+    await addFrameToWall(picture, wallId)
+  }
+}
+
 // Add frame to wall (creates placement for AR)
 const addFrameToWall = async (picture, wallId) => {
   if (!picture.frames || picture.frames.length === 0) {
@@ -141,10 +180,8 @@ const addFrameToWall = async (picture, wallId) => {
 
   assigningWall.value = true
   try {
-    // Get the first frame's data (the 3D frame with dimensions)
     const frameData = picture.frames[0]
 
-    // Add placement to wall's frame_placements array for AR
     await wallsStore.addFramePlacement(wallId, {
       frame_id: frameData.id,
       picture_id: picture.id,
@@ -153,15 +190,6 @@ const addFrameToWall = async (picture, wallId) => {
       scale: 1.0
     })
 
-    // Also update the picture's wall_id for tracking
-    await picturesStore.updatePicture(picture.id, { wall_id: wallId })
-
-    // Update local state
-    if (selectedFrame.value && selectedFrame.value.id === picture.id) {
-      selectedFrame.value.wall_id = wallId
-    }
-
-    // Refresh walls to get updated frame_placements
     await wallsStore.fetchWalls()
   } catch (err) {
     console.error('Failed to add frame to wall:', err)
@@ -171,32 +199,20 @@ const addFrameToWall = async (picture, wallId) => {
   }
 }
 
-// Remove frame from wall
-const removeFrameFromWall = async (pictureId) => {
+// Remove frame from a specific wall
+const removeFrameFromWall = async (pictureId, wallId) => {
   assigningWall.value = true
   try {
-    // Get the picture to find its wall_id and frame info
     const picture = picturesStore.pictures.find(p => p.id === pictureId)
-    if (picture && picture.wall_id) {
-      // Also remove from wall's frame_placements array
-      const wall = wallsStore.walls.find(w => w.id === picture.wall_id)
-      if (wall && wall.frame_placements?.length) {
-        const frameId = picture.frames?.[0]?.id
-        const updatedPlacements = wall.frame_placements.filter(
-          p => p.picture_id !== pictureId && p.frame_id !== frameId
-        )
-        await wallsStore.updateWall(wall.id, { frame_placements: updatedPlacements })
-      }
+    const wall = wallsStore.walls.find(w => w.id === wallId)
+    if (wall && wall.frame_placements?.length) {
+      const frameId = picture?.frames?.[0]?.id
+      const updatedPlacements = wall.frame_placements.filter(
+        p => p.picture_id !== pictureId && p.frame_id !== frameId
+      )
+      await wallsStore.updateWall(wall.id, { frame_placements: updatedPlacements })
     }
 
-    // Update the picture's wall_id to null
-    await picturesStore.updatePicture(pictureId, { wall_id: null })
-
-    if (selectedFrame.value && selectedFrame.value.id === pictureId) {
-      selectedFrame.value.wall_id = null
-    }
-
-    // Refresh walls to get updated frame_placements
     await wallsStore.fetchWalls()
   } catch (err) {
     console.error('Failed to remove frame from wall:', err)
@@ -748,23 +764,15 @@ const getFrameDimensions = (frame) => {
         <!-- Wall assignment -->
         <div class="mb-4">
           <h3 class="font-semibold mb-2">Add to Wall</h3>
-          <p class="text-sm text-gray-400 mb-3">Select a wall to place this frame on for AR viewing</p>
+          <p class="text-sm text-gray-400 mb-3">Select walls to place this frame on for AR viewing</p>
           <div class="grid grid-cols-3 gap-2">
-            <button
-              @click="removeFrameFromWall(selectedFrame.id)"
-              :disabled="assigningWall"
-              class="aspect-video rounded-lg border-2 transition flex items-center justify-center text-sm"
-              :class="!selectedFrame.wall_id ? 'border-primary-500 bg-primary-500/10' : 'border-gray-600 hover:border-gray-500'"
-            >
-              None
-            </button>
             <button
               v-for="wall in wallsStore.walls"
               :key="wall.id"
-              @click="addFrameToWall(selectedFrame, wall.id)"
-              :disabled="assigningWall || selectedFrame.wall_id === wall.id"
+              @click="toggleFrameOnWall(selectedFrame, wall.id)"
+              :disabled="assigningWall"
               class="aspect-video rounded-lg border-2 overflow-hidden transition relative"
-              :class="selectedFrame.wall_id === wall.id ? 'border-primary-500 border-2' : 'border-gray-600 hover:border-gray-500'"
+              :class="isFrameOnWall(selectedFrame, wall.id) ? 'border-primary-500 border-2' : 'border-gray-600 hover:border-gray-500'"
             >
               <img
                 :src="getImageUrl(wall.thumbnail_path || wall.image_path)"
@@ -774,7 +782,7 @@ const getFrameDimensions = (frame) => {
               <div class="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
                 <span class="text-xs truncate block">{{ wall.name }}</span>
               </div>
-              <div v-if="selectedFrame.wall_id === wall.id" class="absolute inset-0 bg-primary-500/20 flex items-center justify-center">
+              <div v-if="isFrameOnWall(selectedFrame, wall.id)" class="absolute inset-0 bg-primary-500/20 flex items-center justify-center">
                 <svg class="w-6 h-6 text-primary-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                 </svg>
@@ -784,16 +792,17 @@ const getFrameDimensions = (frame) => {
           <p v-if="wallsStore.walls.length === 0" class="text-sm text-gray-400 mt-2">
             No walls yet. <router-link to="/capture/wall" class="text-primary-400 hover:underline">Add a wall</router-link> first.
           </p>
-          <p v-if="assigningWall" class="text-sm text-primary-400 mt-2">Adding frame to wall...</p>
+          <p v-if="assigningWall" class="text-sm text-primary-400 mt-2">Updating wall...</p>
         </div>
 
-        <div class="flex gap-3">
+        <div class="flex flex-wrap gap-3">
           <router-link
-            :to="`/wall/${selectedFrame.wall_id}`"
+            v-for="wallId in getFrameWallIds(selectedFrame)"
+            :key="wallId"
+            :to="`/wall/${wallId}`"
             class="btn btn-primary flex-1"
-            v-if="selectedFrame.wall_id"
           >
-            View on Wall
+            View on {{ wallsStore.walls.find(w => w.id === wallId)?.name || 'Wall' }}
           </router-link>
           <button
             @click="deleteFrame(selectedFrame.id)"

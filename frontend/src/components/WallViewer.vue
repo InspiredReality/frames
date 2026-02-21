@@ -62,6 +62,11 @@ const initScene = () => {
   renderer.domElement.addEventListener('mousemove', onMouseMove)
   renderer.domElement.addEventListener('mouseup', onMouseUp)
 
+  // Add touch listeners for mobile frame dragging
+  renderer.domElement.addEventListener('touchstart', onTouchStart)
+  renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false })
+  renderer.domElement.addEventListener('touchend', onTouchEnd)
+
   // Drag state
   dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
   dragOffset = new THREE.Vector3()
@@ -77,6 +82,11 @@ const initScene = () => {
     LEFT: null,
     MIDDLE: THREE.MOUSE.DOLLY,
     RIGHT: THREE.MOUSE.ROTATE
+  }
+  // Disable single-finger rotation on mobile; keep two-finger pinch zoom + pan
+  controls.touches = {
+    ONE: -1,
+    TWO: THREE.TOUCH.DOLLY_PAN
   }
 
   // Lighting
@@ -175,6 +185,87 @@ const onMouseUp = (event) => {
       })
     } else {
       // Was a click, not a drag - select the frame
+      emit('frameSelected', {
+        frameId: draggedFrame.userData.frameId,
+        placementIndex: draggedFrame.userData.placementIndex
+      })
+    }
+    draggedFrame = null
+    isDragging = false
+  }
+}
+
+const onTouchStart = (event) => {
+  if (!containerRef.value) return
+
+  // Only handle single-finger touch for frame dragging
+  if (event.touches.length !== 1) return
+
+  const touch = event.touches[0]
+  const ndc = getMouseNDC(touch)
+  mouseDownPos = { x: touch.clientX, y: touch.clientY }
+  mouse.set(ndc.x, ndc.y)
+  raycaster.setFromCamera(mouse, camera)
+
+  const frameArray = Array.from(frameObjects.values())
+  const intersects = raycaster.intersectObjects(frameArray, true)
+
+  if (intersects.length > 0) {
+    const frameGroup = findFrameGroup(intersects[0].object)
+    if (frameGroup) {
+      draggedFrame = frameGroup
+      isDragging = false
+
+      const intersectPoint = new THREE.Vector3()
+      raycaster.ray.intersectPlane(dragPlane, intersectPoint)
+      dragOffset.copy(frameGroup.position).sub(intersectPoint)
+
+      controls.enabled = false
+    }
+  }
+}
+
+const onTouchMove = (event) => {
+  if (!draggedFrame || !containerRef.value) return
+
+  // Only handle single-finger touch
+  if (event.touches.length !== 1) return
+
+  event.preventDefault() // Prevent scrolling while dragging a frame
+
+  const touch = event.touches[0]
+
+  // Check if actually dragging (use slightly larger threshold for touch)
+  const dx = touch.clientX - mouseDownPos.x
+  const dy = touch.clientY - mouseDownPos.y
+  if (!isDragging && Math.sqrt(dx * dx + dy * dy) < 5) return
+  isDragging = true
+
+  const ndc = getMouseNDC(touch)
+  mouse.set(ndc.x, ndc.y)
+  raycaster.setFromCamera(mouse, camera)
+
+  const intersectPoint = new THREE.Vector3()
+  if (raycaster.ray.intersectPlane(dragPlane, intersectPoint)) {
+    draggedFrame.position.x = intersectPoint.x + dragOffset.x
+    draggedFrame.position.y = intersectPoint.y + dragOffset.y
+  }
+}
+
+const onTouchEnd = () => {
+  controls.enabled = true
+
+  if (draggedFrame) {
+    if (isDragging) {
+      emit('frameMoved', {
+        placementIndex: draggedFrame.userData.placementIndex,
+        position: {
+          x: parseFloat(draggedFrame.position.x.toFixed(4)),
+          y: parseFloat(draggedFrame.position.y.toFixed(4))
+        }
+      })
+    } else {
+      // Was a tap, not a drag - select the frame
       emit('frameSelected', {
         frameId: draggedFrame.userData.frameId,
         placementIndex: draggedFrame.userData.placementIndex
@@ -425,6 +516,9 @@ onUnmounted(() => {
     renderer.domElement.removeEventListener('mousedown', onMouseDown)
     renderer.domElement.removeEventListener('mousemove', onMouseMove)
     renderer.domElement.removeEventListener('mouseup', onMouseUp)
+    renderer.domElement.removeEventListener('touchstart', onTouchStart)
+    renderer.domElement.removeEventListener('touchmove', onTouchMove)
+    renderer.domElement.removeEventListener('touchend', onTouchEnd)
     renderer.dispose()
     containerRef.value?.removeChild(renderer.domElement)
   }

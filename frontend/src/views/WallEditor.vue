@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WallViewer from '@/components/WallViewer.vue'
 import FramePreview2D from '@/components/FramePreview2D.vue'
@@ -56,6 +56,15 @@ const effectiveAspectRatio = computed(() => {
   return lockAspectRatio.value ? recropAspectRatio.value : null
 })
 
+// Lock body scroll when any modal is open (prevents background scrolling on mobile)
+const isAnyModalOpen = computed(() => {
+  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value)
+})
+
+watch(isAnyModalOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
+
 onMounted(async () => {
   try {
     await Promise.all([
@@ -67,6 +76,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = ''
 })
 
 const wall = computed(() => wallsStore.currentWall)
@@ -116,24 +129,9 @@ const removeFrame = async (placementIndex) => {
   try {
     saving.value = true
     const placements = [...(wall.value.frame_placements || [])]
-    const removedPlacement = placements[placementIndex]
     placements.splice(placementIndex, 1)
 
-    // Update wall's frame_placements
     await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
-
-    // Also update the picture's wall_id to null to keep data in sync
-    if (removedPlacement?.picture_id) {
-      await picturesStore.updatePicture(removedPlacement.picture_id, { wall_id: null })
-    } else if (removedPlacement?.frame_id) {
-      // Find picture by frame_id if picture_id is not available
-      const picture = picturesStore.pictures.find(p =>
-        p.frames?.some(f => f.id === removedPlacement.frame_id)
-      )
-      if (picture) {
-        await picturesStore.updatePicture(picture.id, { wall_id: null })
-      }
-    }
   } catch (err) {
     error.value = 'Failed to remove frame'
   } finally {
@@ -209,6 +207,7 @@ const savePosition = async () => {
 
     await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
     savedPosition.value = { ...editingPosition.value }
+    closeFrameEditor()
   } catch (err) {
     console.error('Failed to update position:', err)
     error.value = 'Failed to update position'
