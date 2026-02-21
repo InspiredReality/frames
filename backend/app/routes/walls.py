@@ -23,7 +23,7 @@ def allowed_file(filename):
 def get_walls():
     """Get all walls for the current user."""
     user_id = int(get_jwt_identity())
-    walls = Wall.query.filter_by(user_id=user_id).order_by(Wall.created_at.desc()).all()
+    walls = db.session.query(Wall).filter_by(user_id=user_id).order_by(Wall.created_at.desc()).all()
 
     return jsonify({
         'walls': [w.to_dict(include_placements=True) for w in walls]
@@ -35,7 +35,7 @@ def get_walls():
 def get_wall(wall_id):
     """Get a specific wall by ID with its assigned frames."""
     user_id = int(get_jwt_identity())
-    wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
+    wall = db.session.query(Wall).filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
         return jsonify({'error': 'Wall not found'}), 404
@@ -123,7 +123,7 @@ def create_wall():
 def update_wall(wall_id):
     """Update a wall's details or frame placements."""
     user_id = int(get_jwt_identity())
-    wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
+    wall = db.session.query(Wall).filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
         return jsonify({'error': 'Wall not found'}), 404
@@ -158,7 +158,7 @@ def update_wall(wall_id):
 def delete_wall(wall_id):
     """Delete a wall."""
     user_id = int(get_jwt_identity())
-    wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
+    wall = db.session.query(Wall).filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
         return jsonify({'error': 'Wall not found'}), 404
@@ -187,7 +187,7 @@ def delete_wall(wall_id):
 def add_frame_placement(wall_id):
     """Add a frame placement to a wall."""
     user_id = int(get_jwt_identity())
-    wall = Wall.query.filter_by(id=wall_id, user_id=user_id).first()
+    wall = db.session.query(Wall).filter_by(id=wall_id, user_id=user_id).first()
 
     if not wall:
         return jsonify({'error': 'Wall not found'}), 404

@@ -28,6 +28,15 @@ def create_app() -> FastAPI:
     # Create tables (safe no-op if they already exist)
     Base.metadata.create_all(bind=engine)
 
+    # Add columns that create_all won't add to existing tables
+    with engine.connect() as conn:
+        for col in ["total_width_inches", "total_height_inches", "total_width_cm", "total_height_cm"]:
+            try:
+                conn.execute(text(f"ALTER TABLE picture_frames ADD COLUMN {col} FLOAT"))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
     # -------------------
     # CORS
     # -------------------

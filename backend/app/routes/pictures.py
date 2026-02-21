@@ -33,7 +33,7 @@ def allowed_file(filename):
 def get_pictures():
     """Get all pictures for the current user."""
     user_id = int(get_jwt_identity())
-    pictures = Picture.query.filter_by(user_id=user_id).order_by(Picture.created_at.desc()).all()
+    pictures = db.session.query(Picture).filter_by(user_id=user_id).order_by(Picture.created_at.desc()).all()
 
     return jsonify({
         'pictures': [p.to_dict(include_frames=True) for p in pictures]
@@ -45,7 +45,7 @@ def get_pictures():
 def get_picture(picture_id):
     """Get a specific picture by ID."""
     user_id = int(get_jwt_identity())
-    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+    picture = db.session.query(Picture).filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
         return jsonify({'error': 'Picture not found'}), 404
@@ -128,7 +128,7 @@ def create_picture():
 def update_picture(picture_id):
     """Update a picture's details."""
     user_id = int(get_jwt_identity())
-    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+    picture = db.session.query(Picture).filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
         return jsonify({'error': 'Picture not found'}), 404
@@ -155,7 +155,7 @@ def update_picture(picture_id):
 def update_picture_image(picture_id):
     """Update a picture's image (for recrop functionality)."""
     user_id = int(get_jwt_identity())
-    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+    picture = db.session.query(Picture).filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
         return jsonify({'error': 'Picture not found'}), 404
@@ -218,7 +218,7 @@ def update_picture_image(picture_id):
 def delete_picture(picture_id):
     """Delete a picture and all associated frames."""
     user_id = int(get_jwt_identity())
-    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+    picture = db.session.query(Picture).filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
         return jsonify({'error': 'Picture not found'}), 404
@@ -256,7 +256,7 @@ def create_frame(picture_id):
     """Create a 3D frame for a picture with specified dimensions."""
     try:
         user_id = int(get_jwt_identity())
-        picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+        picture = db.session.query(Picture).filter_by(id=picture_id, user_id=user_id).first()
 
         if not picture:
             return jsonify({'error': 'Picture not found'}), 404
@@ -327,12 +327,12 @@ def update_frame(picture_id, frame_id):
     """Update a frame's dimensions."""
     try:
         user_id = int(get_jwt_identity())
-        picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+        picture = db.session.query(Picture).filter_by(id=picture_id, user_id=user_id).first()
 
         if not picture:
             return jsonify({'error': 'Picture not found'}), 404
 
-        frame = PictureFrame.query.filter_by(id=frame_id, picture_id=picture_id).first()
+        frame = db.session.query(PictureFrame).filter_by(id=frame_id, picture_id=picture_id).first()
 
         if not frame:
             return jsonify({'error': 'Frame not found'}), 404
@@ -382,12 +382,12 @@ def update_frame(picture_id, frame_id):
 def delete_frame(picture_id, frame_id):
     """Delete a frame."""
     user_id = int(get_jwt_identity())
-    picture = Picture.query.filter_by(id=picture_id, user_id=user_id).first()
+    picture = db.session.query(Picture).filter_by(id=picture_id, user_id=user_id).first()
 
     if not picture:
         return jsonify({'error': 'Picture not found'}), 404
 
-    frame = PictureFrame.query.filter_by(id=frame_id, picture_id=picture_id).first()
+    frame = db.session.query(PictureFrame).filter_by(id=frame_id, picture_id=picture_id).first()
 
     if not frame:
         return jsonify({'error': 'Frame not found'}), 404
