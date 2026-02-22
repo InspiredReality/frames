@@ -75,17 +75,17 @@ def get_model_info(
 
 
 @router.get("/uploads/{filename:path}", status_code=200)
-def serve_upload(filename: str, response: Response):
+def serve_upload(filename: str):
     """
     Serve uploaded files (images, models, etc.).
-    Public endpoint in your Flask version.
+    Public endpoint — must include CORS headers so WebGL / Three.js
+    can use the images as textures (cross-origin).
     """
     file_path = _resolve_safe_upload_path(filename)
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Add headers similar to Flask version
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
-
-    return FileResponse(path=str(file_path))
+    resp = FileResponse(path=str(file_path))
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    return resp
