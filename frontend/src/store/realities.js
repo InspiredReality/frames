@@ -1,0 +1,182 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import api from '@/services/api'
+
+export const useRealitiesStore = defineStore('realities', () => {
+  const realities = ref([])
+  const currentReality = ref(null)
+  const loading = ref(false)
+  const error = ref(null)
+
+  // Cache: key = orgOb id (number) or null (top-level). Value = OrgOb with children array.
+  const orgObCache = ref({})
+
+  // ----------------------------
+  // Reality CRUD
+  // ----------------------------
+  async function fetchRealities() {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await api.get('/realities')
+      realities.value = res.data.realities
+      return realities.value
+    } catch (err) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchReality(id) {
+    loading.value = true
+    try {
+      const res = await api.get(`/realities/${id}`)
+      currentReality.value = res.data.reality
+      return currentReality.value
+    } catch (err) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function createReality(data) {
+    const res = await api.post('/realities', data)
+    realities.value.unshift(res.data.reality)
+    return res.data.reality
+  }
+
+  async function updateReality(id, data) {
+    const res = await api.put(`/realities/${id}`, data)
+    const idx = realities.value.findIndex(r => r.id === id)
+    if (idx !== -1) realities.value[idx] = res.data.reality
+    if (currentReality.value?.id === id) currentReality.value = res.data.reality
+    return res.data.reality
+  }
+
+  async function deleteReality(id) {
+    await api.delete(`/realities/${id}`)
+    realities.value = realities.value.filter(r => r.id !== id)
+    if (currentReality.value?.id === id) currentReality.value = null
+  }
+
+  // ----------------------------
+  // OrgOb lazy-load
+  // ----------------------------
+
+  // Fetch top-level OrgObs (parent_id = null) for a Reality.
+  // Stores each top-level OrgOb and its children in orgObCache.
+  async function fetchTopLevel(realityId) {
+    loading.value = true
+    try {
+      const res = await api.get(`/realities/${realityId}/org-obs`)
+      const topLevel = res.data.org_obs
+      topLevel.forEach(o => { orgObCache.value[o.id] = o })
+      // Store the top-level list under the null key scoped to this reality
+      orgObCache.value[`top:${realityId}`] = topLevel
+      return topLevel
+    } catch (err) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchOrgOb(orgObId) {
+    const res = await api.get(`/org-obs/${orgObId}`)
+    const orgOb = res.data.org_ob
+    orgObCache.value[orgOb.id] = orgOb
+    return orgOb
+  }
+
+  async function createOrgOb(realityId, data) {
+    const res = await api.post(`/realities/${realityId}/org-obs`, data)
+    const orgOb = res.data.org_ob
+
+    // Insert into cache
+    orgObCache.value[orgOb.id] = orgOb
+
+    if (orgOb.parent_id === null) {
+      // Append to the top-level list
+      const key = `top:${realityId}`
+      if (!orgObCache.value[key]) orgObCache.value[key] = []
+      orgObCache.value[key] = [...orgObCache.value[key], orgOb]
+    } else {
+      // Append to parent's children array in cache
+      const parent = orgObCache.value[orgOb.parent_id]
+      if (parent) {
+        parent.children = [...(parent.children || []), orgOb]
+        parent.children_count = (parent.children_count || 0) + 1
+      }
+    }
+
+    return orgOb
+  }
+
+  async function updateOrgOb(id, data) {
+    const res = await api.put(`/org-obs/${id}`, data)
+    const updated = res.data.org_ob
+    orgObCache.value[id] = updated
+    return updated
+  }
+
+  async function deleteOrgOb(id, parentId, realityId) {
+    await api.delete(`/org-obs/${id}`)
+    delete orgObCache.value[id]
+
+    if (parentId === null) {
+      const key = `top:${realityId}`
+      if (orgObCache.value[key]) {
+        orgObCache.value[key] = orgObCache.value[key].filter(o => o.id !== id)
+      }
+    } else {
+      const parent = orgObCache.value[parentId]
+      if (parent?.children) {
+        parent.children = parent.children.filter(c => c.id !== id)
+        parent.children_count = Math.max(0, (parent.children_count || 1) - 1)
+      }
+    }
+  }
+
+  // ----------------------------
+  // Helpers
+  // ----------------------------
+
+  // Returns the list of OrgObs for a given parent context.
+  // parentId = null → top-level list; parentId = number → children of that OrgOb.
+  function getChildren(realityId, parentId) {
+    if (parentId === null) {
+      return orgObCache.value[`top:${realityId}`] || []
+    }
+    return orgObCache.value[parentId]?.children || []
+  }
+
+  function clearCache() {
+    orgObCache.value = {}
+    currentReality.value = null
+  }
+
+  return {
+    realities,
+    currentReality,
+    loading,
+    error,
+    orgObCache,
+    fetchRealities,
+    fetchReality,
+    createReality,
+    updateReality,
+    deleteReality,
+    fetchTopLevel,
+    fetchOrgOb,
+    createOrgOb,
+    updateOrgOb,
+    deleteOrgOb,
+    getChildren,
+    clearCache,
+  }
+})

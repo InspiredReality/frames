@@ -10,13 +10,15 @@ from app.core.settings import settings
 from app.db import engine, Base, get_db
 
 # Import models so they register with Base.metadata
-from app.models import User, Wall, Picture, PictureFrame  # noqa: F401
+from app.models import User, Wall, Picture, PictureFrame, Reality, OrgOb  # noqa: F401
 
 # Routers
 from app.routers.auth import router as auth_router
 from app.routers.walls import router as walls_router
 from app.routers.pictures import router as pictures_router
 from app.routers.models3d import router as models3d_router
+from app.routers.realities import router as realities_router
+from app.routers.org_obs import router as org_obs_router
 
 
 def create_app() -> FastAPI:
@@ -69,6 +71,8 @@ def create_app() -> FastAPI:
     app.include_router(walls_router, prefix="/api/walls", tags=["walls"])
     app.include_router(pictures_router, prefix="/api/pictures", tags=["pictures"])
     app.include_router(models3d_router, prefix="/api/models", tags=["models"])
+    app.include_router(realities_router, prefix="/api/realities", tags=["realities"])
+    app.include_router(org_obs_router, prefix="/api/org-obs", tags=["org-obs"])
 
     # -------------------
     # Root + health + status

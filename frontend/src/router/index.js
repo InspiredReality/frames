@@ -54,6 +54,18 @@ const routes = [
     name: 'ar-view',
     component: () => import('@/views/ARView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/realities',
+    name: 'realities',
+    component: () => import('@/views/Realities.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/reality/:id',
+    name: 'org-levels',
+    component: () => import('@/views/OrgLevels.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
