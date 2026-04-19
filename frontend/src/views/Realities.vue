@@ -103,6 +103,7 @@
             class="bg-dark-300 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 resize-none"
           />
         </div>
+        <p v-if="createError" class="text-red-400 text-sm mt-3">{{ createError }}</p>
         <div class="flex gap-3 mt-5">
           <button
             @click="submitCreate"
@@ -164,6 +165,7 @@ const loading = ref(true)
 // Create modal
 const showCreateModal = ref(false)
 const creating = ref(false)
+const createError = ref('')
 const createForm = ref({ name: '', description: '' })
 
 // Edit modal
@@ -185,18 +187,22 @@ function formatDate(iso) {
 
 function closeCreateModal() {
   showCreateModal.value = false
+  createError.value = ''
   createForm.value = { name: '', description: '' }
 }
 
 async function submitCreate() {
   if (!createForm.value.name.trim()) return
   creating.value = true
+  createError.value = ''
   try {
     await store.createReality({
       name: createForm.value.name.trim(),
       description: createForm.value.description.trim() || null,
     })
     closeCreateModal()
+  } catch (err) {
+    createError.value = err.response?.data?.detail || err.message || 'Failed to create reality'
   } finally {
     creating.value = false
   }
