@@ -385,28 +385,17 @@ const updateFrames = () => {
     const pictureHeight = frameHeight - borderWidth * 2
     const pictureGeometry = new THREE.PlaneGeometry(pictureWidth, pictureHeight)
 
-    // Load the image texture
+    // Load the image texture - use same synchronous pattern as wall texture
     const imageUrl = frame.pictureImage ? getUploadUrl(frame.pictureImage) : null
     let pictureMaterial
 
     if (imageUrl) {
+      const texture = textureLoader.load(imageUrl)
+      texture.colorSpace = THREE.SRGBColorSpace
       pictureMaterial = new THREE.MeshStandardMaterial({
-        color: 0x333333,
+        map: texture,
         side: THREE.FrontSide
       })
-      textureLoader.load(
-        imageUrl,
-        (texture) => {
-          texture.colorSpace = THREE.SRGBColorSpace
-          pictureMaterial.map = texture
-          pictureMaterial.color.set(0xffffff)
-          pictureMaterial.needsUpdate = true
-        },
-        undefined,
-        (err) => {
-          console.error('Failed to load frame texture:', imageUrl, err)
-        }
-      )
     } else {
       pictureMaterial = new THREE.MeshStandardMaterial({
         color: 0xcccccc,
