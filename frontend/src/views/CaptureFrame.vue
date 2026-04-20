@@ -49,6 +49,13 @@ const aspectRatio = computed(() => {
   return null
 })
 
+// Stable reference for FramePreview dimensions (avoids infinite re-render loop)
+const framePreviewDimensions = computed(() => ({
+  width: parseFloat(dimensions.value.width) || 10,
+  height: parseFloat(dimensions.value.height) || 8,
+  depth: parseFloat(dimensions.value.depth) || 1
+}))
+
 // Get selected wall
 const selectedWall = computed(() => {
   if (!selectedWallId.value) return null
@@ -317,11 +324,7 @@ const savePicture = async () => {
             <h4 class="text-sm text-gray-400 mb-2">3D Frame Preview</h4>
             <FramePreview
               :imageUrl="croppedImage.dataUrl"
-              :dimensions="{
-                width: parseFloat(dimensions.width) || 10,
-                height: parseFloat(dimensions.height) || 8,
-                depth: parseFloat(dimensions.depth) || 1
-              }"
+              :dimensions="framePreviewDimensions"
               :frameColor="frameColor"
               :frameThickness="frameThickness"
               @update:totalDimensions="totalDimensions = $event"

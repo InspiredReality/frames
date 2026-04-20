@@ -2,13 +2,15 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
+import ImageCropper from '@/components/ImageCropper.vue'
 import { useWallsStore } from '@/store/walls'
 
 const router = useRouter()
 const wallsStore = useWallsStore()
 
-const step = ref(1) // 1: capture/choose, 2: details
+const step = ref(1) // 1: capture/choose, 2: crop, 3: details
 const capturedImage = ref(null)
+const croppedImage = ref(null)
 const wallName = ref('')
 const wallDescription = ref('')
 const wallWidth = ref('')
@@ -90,8 +92,21 @@ const getDimensionInCm = (value) => {
 
 const onCapture = (data) => {
   capturedImage.value = data
+  croppedImage.value = data // Initialize with full image
   useBlankColor.value = false
   step.value = 2
+}
+
+const onCrop = (data) => {
+  croppedImage.value = data
+}
+
+const skipCrop = () => {
+  step.value = 3
+}
+
+const confirmCrop = () => {
+  step.value = 3
 }
 
 const onCameraError = (message) => {
@@ -101,11 +116,13 @@ const onCameraError = (message) => {
 const selectBlankColor = () => {
   useBlankColor.value = true
   capturedImage.value = null
-  step.value = 2
+  croppedImage.value = null
+  step.value = 3
 }
 
 const retake = () => {
   capturedImage.value = null
+  croppedImage.value = null
   useBlankColor.value = false
   step.value = 1
   error.value = ''
@@ -127,7 +144,7 @@ const saveWall = async () => {
     if (useBlankColor.value) {
       bgColor = wallColor.value
     } else {
-      file = new File([capturedImage.value.blob], 'wall.jpg', { type: 'image/jpeg' })
+      file = new File([croppedImage.value.blob], 'wall.jpg', { type: 'image/jpeg' })
     }
 
     await wallsStore.uploadWall(file, wallName.value, wallDescription.value, {
@@ -149,7 +166,7 @@ const saveWall = async () => {
     <!-- Step indicator -->
     <div class="flex items-center justify-center mb-8">
       <div
-        v-for="s in 2"
+        v-for="s in 3"
         :key="s"
         class="flex items-center"
       >
@@ -160,7 +177,7 @@ const saveWall = async () => {
           {{ s }}
         </div>
         <div
-          v-if="s < 2"
+          v-if="s < 3"
           class="w-12 h-1 mx-2"
           :class="step > s ? 'bg-primary-500' : 'bg-dark-300'"
         ></div>
@@ -196,15 +213,54 @@ const saveWall = async () => {
       </div>
     </div>
 
-    <!-- Step 2: Wall Details -->
-    <div v-if="step === 2" class="card">
+    <!-- Step 2: Crop -->
+    <div v-if="step === 2" class="max-w-2xl mx-auto">
+      <h2 class="text-2xl font-bold mb-4 text-center">Crop Your Wall Photo</h2>
+      <p class="text-gray-400 text-center mb-6">
+        Drag the corners or edges to select the wall area
+      </p>
+
+      <div class="card mb-4">
+        <ImageCropper
+          :imageUrl="capturedImage.dataUrl"
+          @crop="onCrop"
+        />
+      </div>
+
+      <!-- Cropped Preview -->
+      <div v-if="croppedImage?.dataUrl" class="card mb-4">
+        <h3 class="font-semibold mb-2">Cropped Result</h3>
+        <div class="bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center" style="max-height: 200px;">
+          <img
+            :src="croppedImage.dataUrl"
+            alt="Cropped preview"
+            class="max-w-full max-h-full object-contain"
+          />
+        </div>
+        <div class="mt-2 text-xs text-gray-500 text-center">
+          {{ croppedImage.width }} x {{ croppedImage.height }} pixels
+        </div>
+      </div>
+
+      <div class="flex gap-4">
+        <button @click="retake" class="btn btn-secondary flex-1">
+          Retake Photo
+        </button>
+        <button @click="confirmCrop" class="btn btn-primary flex-1">
+          Continue
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Wall Details -->
+    <div v-if="step === 3" class="card">
       <h2 class="text-2xl font-bold mb-4">Wall Details</h2>
 
-      <!-- Preview of captured image -->
-      <div v-if="!useBlankColor" class="mb-6">
+      <!-- Preview of cropped image -->
+      <div v-if="!useBlankColor && croppedImage" class="mb-6">
         <img
-          :src="capturedImage.dataUrl"
-          alt="Captured wall"
+          :src="croppedImage.dataUrl"
+          alt="Cropped wall"
           class="w-full max-h-64 object-contain rounded-lg bg-dark-300"
         />
       </div>
@@ -317,8 +373,8 @@ const saveWall = async () => {
       </div>
 
       <div class="flex gap-4 mt-6">
-        <button @click="retake" class="btn btn-secondary flex-1">
-          {{ useBlankColor ? 'Go Back' : 'Retake Photo' }}
+        <button @click="useBlankColor ? retake() : (step = 2)" class="btn btn-secondary flex-1">
+          {{ useBlankColor ? 'Go Back' : 'Edit Crop' }}
         </button>
         <button
           @click="saveWall"
