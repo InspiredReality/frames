@@ -1,11 +1,13 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePicturesStore } from '@/store/pictures'
 import { useWallsStore } from '@/store/walls'
 import { getUploadUrl } from '@/services/api'
 import FramePreview2D from '@/components/FramePreview2D.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 
+const router = useRouter()
 const picturesStore = usePicturesStore()
 const wallsStore = useWallsStore()
 const loading = ref(true)
@@ -89,8 +91,7 @@ const openFrameDetails = (frame) => {
 }
 
 const openWallDetails = (wall) => {
-  selectedWall.value = wall
-  selectedFrame.value = null
+  router.push(`/wall/${wall.id}`)
 }
 
 const closeModal = () => {

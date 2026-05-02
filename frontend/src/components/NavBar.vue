@@ -38,9 +38,6 @@ const logout = () => {
             <router-link to="/gallery" class="text-gray-300 hover:text-white transition">
               Gallery
             </router-link>
-            <router-link to="/walls" class="text-gray-300 hover:text-white transition">
-              My Walls
-            </router-link>
             <router-link to="/realities" class="text-gray-300 hover:text-white transition">
               Realities
             </router-link>
@@ -78,9 +75,6 @@ const logout = () => {
           </router-link>
           <router-link to="/gallery" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
             Gallery
-          </router-link>
-          <router-link to="/walls" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
-            My Walls
           </router-link>
           <router-link to="/realities" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
             Realities
