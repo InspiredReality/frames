@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
@@ -159,10 +159,28 @@ const handleResize = () => {
   renderer.setSize(width, height)
 }
 
-watch(() => props.dimensions, createFrame, { deep: true })
-watch(() => props.imageUrl, createFrame)
-watch(() => props.frameColor, createFrame)
-watch(() => props.frameThickness, createFrame)
+// Watch a serialized snapshot of all props that affect the frame.
+// This avoids infinite loops caused by parent re-renders passing new
+// object references for dimensions (which would re-trigger deep watchers).
+let pendingUpdate = false
+watch(
+  () => JSON.stringify([
+    props.dimensions.width,
+    props.dimensions.height,
+    props.dimensions.depth,
+    props.imageUrl,
+    props.frameColor,
+    props.frameThickness
+  ]),
+  () => {
+    if (pendingUpdate) return
+    pendingUpdate = true
+    nextTick(() => {
+      pendingUpdate = false
+      if (scene) createFrame()
+    })
+  }
+)
 
 onMounted(() => {
   initScene()
