@@ -527,8 +527,7 @@ const getFrameDimensions = (frame) => {
           <div
             v-for="wall in filteredItems.walls"
             :key="'wall-' + wall.id"
-            @click="openWallDetails(wall)"
-            class="card p-3 cursor-pointer hover:ring-2 hover:ring-primary-500 transition"
+            class="card p-3 hover:border-primary-500/50 transition-colors border border-transparent"
           >
             <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-3">
               <img
@@ -537,14 +536,34 @@ const getFrameDimensions = (frame) => {
                 class="w-full h-full object-cover"
               />
             </div>
-            <div class="flex items-start justify-between">
-              <div>
-                <h3 class="font-medium">{{ wall.name }}</h3>
-                <p class="text-sm text-gray-400">
-                  {{ getWallFrameCount(wall) }} frame(s) assigned
-                </p>
-              </div>
-              <span class="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 rounded">Wall</span>
+            <h3 class="font-medium mb-1">{{ wall.name }}</h3>
+            <p class="text-sm text-gray-400 mb-3">
+              {{ getWallFrameCount(wall) }} frame(s) assigned
+            </p>
+            <div class="flex gap-2">
+              <button
+                @click="openWallDetails(wall)"
+                class="btn btn-primary flex-1"
+              >
+                Open
+              </button>
+              <button
+                @click="openWallDetails(wall)"
+                class="btn btn-secondary"
+                title="Edit wall"
+              >
+                ✎
+              </button>
+              <button
+                @click="deleteWall(wall.id)"
+                class="btn bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white"
+                title="Delete wall"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
