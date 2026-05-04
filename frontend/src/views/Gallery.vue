@@ -236,24 +236,45 @@ const getWallName = (wallId) => {
 }
 
 // Frame dimension editing
+const CM_PER_INCH = 2.54
+
 const startEditingFrameDimensions = (frame) => {
   if (frame.frames?.length) {
     const frameData = frame.frames[0]
-    const unit = 'cm' // Default to cm
+    const unit = 'in' // Default to inches
     frameDimensionEdit.value = {
-      width: frameData.dimensions?.cm?.width || 0,
-      height: frameData.dimensions?.cm?.height || 0,
+      width: frameData.dimensions?.inches?.width || 0,
+      height: frameData.dimensions?.inches?.height || 0,
       unit: unit
     }
-    // Load frame styling (thickness is stored in inches, convert to selected unit)
+    // Load frame styling (thickness is stored in inches)
     const thicknessInches = frameData.styling?.frame_thickness || 1
     frameStyleEdit.value = {
       color: frameData.styling?.frame_color || '#000000',
-      thickness: unit === 'cm' ? thicknessInches * 2.54 : thicknessInches
+      thickness: thicknessInches
     }
     showColorPicker.value = false
     editingFrameDimensions.value = true
   }
+}
+
+// Toggle frame dimension unit between inches and cm
+const selectFrameUnitIn = () => {
+  if (frameDimensionEdit.value.unit === 'in') return
+  // Convert from cm to inches
+  frameDimensionEdit.value.width = +(frameDimensionEdit.value.width / CM_PER_INCH).toFixed(2)
+  frameDimensionEdit.value.height = +(frameDimensionEdit.value.height / CM_PER_INCH).toFixed(2)
+  frameStyleEdit.value.thickness = +(frameStyleEdit.value.thickness / CM_PER_INCH).toFixed(2)
+  frameDimensionEdit.value.unit = 'in'
+}
+
+const selectFrameUnitCm = () => {
+  if (frameDimensionEdit.value.unit === 'cm') return
+  // Convert from inches to cm
+  frameDimensionEdit.value.width = +(frameDimensionEdit.value.width * CM_PER_INCH).toFixed(1)
+  frameDimensionEdit.value.height = +(frameDimensionEdit.value.height * CM_PER_INCH).toFixed(1)
+  frameStyleEdit.value.thickness = +(frameStyleEdit.value.thickness * CM_PER_INCH).toFixed(1)
+  frameDimensionEdit.value.unit = 'cm'
 }
 
 const cancelEditingFrameDimensions = () => {
@@ -268,13 +289,16 @@ const saveFrameDimensions = async () => {
     const frameData = selectedFrame.value.frames[0]
     // Convert thickness to inches for API (thickness is always stored in inches on backend)
     const thicknessInches = frameDimensionEdit.value.unit === 'cm'
-      ? frameStyleEdit.value.thickness / 2.54
+      ? frameStyleEdit.value.thickness / CM_PER_INCH
       : frameStyleEdit.value.thickness
+
+    // Map 'in' to 'inches' for API compatibility
+    const apiUnit = frameDimensionEdit.value.unit === 'in' ? 'inches' : frameDimensionEdit.value.unit
 
     await picturesStore.updateFrame(selectedFrame.value.id, frameData.id, {
       width: frameDimensionEdit.value.width,
       height: frameDimensionEdit.value.height,
-      unit: frameDimensionEdit.value.unit,
+      unit: apiUnit,
       frame_color: frameStyleEdit.value.color,
       frame_thickness: thicknessInches
     })
@@ -469,15 +493,19 @@ const getFrameDimensions = (frame) => {
 
     // Use editing values if currently editing, otherwise use saved values
     if (editingFrameDimensions.value && frame.id === selectedFrame.value?.id) {
+      // Convert thickness to inches for preview (FramePreview2D expects inches)
+      const thicknessInches = frameDimensionEdit.value.unit === 'cm'
+        ? frameStyleEdit.value.thickness / CM_PER_INCH
+        : frameStyleEdit.value.thickness
       return {
         widthCm: frameDimensionEdit.value.unit === 'cm'
           ? frameDimensionEdit.value.width
-          : frameDimensionEdit.value.width * 2.54,
+          : frameDimensionEdit.value.width * CM_PER_INCH,
         heightCm: frameDimensionEdit.value.unit === 'cm'
           ? frameDimensionEdit.value.height
-          : frameDimensionEdit.value.height * 2.54,
+          : frameDimensionEdit.value.height * CM_PER_INCH,
         frameColor: frameStyleEdit.value.color,
-        frameThickness: frameStyleEdit.value.thickness
+        frameThickness: thicknessInches
       }
     }
 
@@ -737,19 +765,30 @@ const getFrameDimensions = (frame) => {
                       class="w-20 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
                     />
                   </div>
-                  <select
-                    v-model="frameDimensionEdit.unit"
-                    class="px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-                  >
-                    <option value="cm">cm</option>
-                    <option value="inches">inches</option>
-                  </select>
+                  <div class="flex gap-1">
+                    <button
+                      @click="selectFrameUnitIn"
+                      type="button"
+                      class="px-2 py-1 text-xs rounded transition"
+                      :class="frameDimensionEdit.unit === 'in' ? 'bg-primary-500 text-white' : 'bg-dark-100 border border-gray-600 hover:bg-dark-300'"
+                    >
+                      in
+                    </button>
+                    <button
+                      @click="selectFrameUnitCm"
+                      type="button"
+                      class="px-2 py-1 text-xs rounded transition"
+                      :class="frameDimensionEdit.unit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 border border-gray-600 hover:bg-dark-300'"
+                    >
+                      cm
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Frame Thickness -->
                 <div>
                   <label class="block text-xs text-gray-400 mb-1">
-                    Frame Thickness ({{ frameDimensionEdit.unit }})
+                    Frame Thickness ({{ frameDimensionEdit.unit === 'in' ? 'in' : 'cm' }})
                   </label>
                   <input
                     v-model.number="frameStyleEdit.thickness"

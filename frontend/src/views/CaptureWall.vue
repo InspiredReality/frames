@@ -14,9 +14,15 @@ const capturedImage = ref(null)
 const croppedImage = ref(null)
 const wallName = ref('')
 const wallDescription = ref('')
-const wallWidth = ref('')
-const wallHeight = ref('')
-const wallUnit = ref('feet') // 'feet', 'inches', or 'cm'
+const wallUnit = ref('ft') // 'ft' or 'cm'
+// For ft & in mode
+const widthFt = ref('')
+const widthIn = ref('')
+const heightFt = ref('')
+const heightIn = ref('')
+// For cm mode
+const widthCm = ref('')
+const heightCm = ref('')
 const loading = ref(false)
 const error = ref('')
 
@@ -38,57 +44,72 @@ const wallColorPresets = [
 const INCHES_PER_FOOT = 12
 const CM_PER_INCH = 2.54
 
-const unitLabels = {
-  feet: 'ft',
-  inches: 'in',
-  cm: 'cm'
+// Convert cm to feet and inches
+const cmToFtIn = (cm) => {
+  if (!cm) return { ft: '', inches: '' }
+  const totalInches = cm / CM_PER_INCH
+  const ft = Math.floor(totalInches / INCHES_PER_FOOT)
+  const inches = Math.round(totalInches % INCHES_PER_FOOT)
+  return { ft: ft || '', inches: inches || '' }
 }
 
-const unitPlaceholders = {
-  feet: { width: 'e.g., 10', height: 'e.g., 8' },
-  inches: { width: 'e.g., 120', height: 'e.g., 96' },
-  cm: { width: 'e.g., 300', height: 'e.g., 250' }
+// Convert feet and inches to cm
+const ftInToCm = (ft, inches) => {
+  const ftNum = parseFloat(ft) || 0
+  const inNum = parseFloat(inches) || 0
+  const totalInches = (ftNum * INCHES_PER_FOOT) + inNum
+  return totalInches * CM_PER_INCH
 }
 
-const toggleUnit = () => {
-  const units = ['feet', 'inches', 'cm']
-  const currentIndex = units.indexOf(wallUnit.value)
-  const newUnit = units[(currentIndex + 1) % units.length]
+// Switch to ft & in mode
+const selectFtIn = () => {
+  if (wallUnit.value === 'ft') return
 
-  // Convert existing values
-  if (wallWidth.value) {
-    wallWidth.value = convertDimension(parseFloat(wallWidth.value), wallUnit.value, newUnit)
+  // Convert cm values to ft & in
+  const wCm = parseFloat(widthCm.value) || 0
+  const hCm = parseFloat(heightCm.value) || 0
+
+  const wFtIn = cmToFtIn(wCm)
+  const hFtIn = cmToFtIn(hCm)
+
+  widthFt.value = wFtIn.ft
+  widthIn.value = wFtIn.inches
+  heightFt.value = hFtIn.ft
+  heightIn.value = hFtIn.inches
+
+  wallUnit.value = 'ft'
+}
+
+// Switch to cm mode
+const selectCm = () => {
+  if (wallUnit.value === 'cm') return
+
+  // Convert ft & in values to cm
+  const wCm = ftInToCm(widthFt.value, widthIn.value)
+  const hCm = ftInToCm(heightFt.value, heightIn.value)
+
+  widthCm.value = wCm ? Math.round(wCm) : ''
+  heightCm.value = hCm ? Math.round(hCm) : ''
+
+  wallUnit.value = 'cm'
+}
+
+// Get width in cm for saving
+const getWidthInCm = () => {
+  if (wallUnit.value === 'cm') {
+    return parseFloat(widthCm.value) || null
   }
-  if (wallHeight.value) {
-    wallHeight.value = convertDimension(parseFloat(wallHeight.value), wallUnit.value, newUnit)
+  const cm = ftInToCm(widthFt.value, widthIn.value)
+  return cm || null
+}
+
+// Get height in cm for saving
+const getHeightInCm = () => {
+  if (wallUnit.value === 'cm') {
+    return parseFloat(heightCm.value) || null
   }
-
-  wallUnit.value = newUnit
-}
-
-const convertDimension = (value, fromUnit, toUnit) => {
-  if (!value) return ''
-
-  // First convert to cm
-  let cm = value
-  if (fromUnit === 'feet') cm = value * INCHES_PER_FOOT * CM_PER_INCH
-  else if (fromUnit === 'inches') cm = value * CM_PER_INCH
-
-  // Then convert from cm to target unit
-  let result = cm
-  if (toUnit === 'feet') result = cm / (INCHES_PER_FOOT * CM_PER_INCH)
-  else if (toUnit === 'inches') result = cm / CM_PER_INCH
-
-  return result.toFixed(toUnit === 'feet' ? 2 : toUnit === 'inches' ? 1 : 0)
-}
-
-const getDimensionInCm = (value) => {
-  if (!value) return null
-  const num = parseFloat(value)
-  if (wallUnit.value === 'cm') return num
-  if (wallUnit.value === 'inches') return num * CM_PER_INCH
-  if (wallUnit.value === 'feet') return num * INCHES_PER_FOOT * CM_PER_INCH
-  return num
+  const cm = ftInToCm(heightFt.value, heightIn.value)
+  return cm || null
 }
 
 const onCapture = (data) => {
@@ -149,8 +170,8 @@ const saveWall = async () => {
     }
 
     await wallsStore.uploadWall(file, wallName.value, wallDescription.value, {
-      width_cm: getDimensionInCm(wallWidth.value),
-      height_cm: getDimensionInCm(wallHeight.value)
+      width_cm: getWidthInCm(),
+      height_cm: getHeightInCm()
     }, bgColor)
 
     router.push('/gallery')
@@ -233,29 +254,12 @@ const saveWall = async () => {
       </p>
 
       <!-- Photo cropping (for captured images) -->
-      <template v-if="!useBlankColor && capturedImage">
-        <div class="card mb-4">
-          <ImageCropper
-            :imageUrl="capturedImage.dataUrl"
-            @crop="onCrop"
-          />
-        </div>
-
-        <!-- Cropped Preview -->
-        <div v-if="croppedImage?.dataUrl" class="card mb-4">
-          <h3 class="font-semibold mb-2">Cropped Result</h3>
-          <div class="bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center" style="max-height: 200px;">
-            <img
-              :src="croppedImage.dataUrl"
-              alt="Cropped preview"
-              class="max-w-full max-h-full object-contain"
-            />
-          </div>
-          <div class="mt-2 text-xs text-gray-500 text-center">
-            {{ croppedImage.width }} x {{ croppedImage.height }} pixels
-          </div>
-        </div>
-      </template>
+      <div v-if="!useBlankColor && capturedImage" class="card mb-4">
+        <ImageCropper
+          :imageUrl="capturedImage.dataUrl"
+          @crop="onCrop"
+        />
+      </div>
 
       <!-- Color selection (for blank color walls) -->
       <div v-if="useBlankColor" class="card mb-4">
@@ -303,39 +307,115 @@ const saveWall = async () => {
       <div class="card mb-4">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold">Wall Dimensions (optional)</h3>
-          <button
-            @click="toggleUnit"
-            class="px-3 py-1 text-sm bg-dark-300 rounded-full hover:bg-dark-100 transition"
-          >
-            Switch to {{ wallUnit === 'feet' ? 'inches' : wallUnit === 'inches' ? 'cm' : 'feet' }}
-          </button>
+          <div class="flex gap-2">
+            <button
+              @click="selectFtIn"
+              class="px-3 py-1 text-sm rounded-full transition"
+              :class="wallUnit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-300 hover:bg-dark-100'"
+            >
+              ft & in
+            </button>
+            <button
+              @click="selectCm"
+              class="px-3 py-1 text-sm rounded-full transition"
+              :class="wallUnit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-300 hover:bg-dark-100'"
+            >
+              cm
+            </button>
+          </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
+        <!-- ft & in inputs -->
+        <div v-if="wallUnit === 'ft'" class="space-y-3">
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Width ({{ unitLabels[wallUnit] }})</label>
+            <label class="block text-xs text-gray-400 mb-1">Width</label>
+            <div class="flex gap-2">
+              <div class="flex-1">
+                <input
+                  v-model="widthFt"
+                  type="number"
+                  min="0"
+                  placeholder="ft"
+                  class="w-full"
+                />
+              </div>
+              <div class="flex-1">
+                <input
+                  v-model="widthIn"
+                  type="number"
+                  min="0"
+                  max="11"
+                  placeholder="in"
+                  class="w-full"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Height</label>
+            <div class="flex gap-2">
+              <div class="flex-1">
+                <input
+                  v-model="heightFt"
+                  type="number"
+                  min="0"
+                  placeholder="ft"
+                  class="w-full"
+                />
+              </div>
+              <div class="flex-1">
+                <input
+                  v-model="heightIn"
+                  type="number"
+                  min="0"
+                  max="11"
+                  placeholder="in"
+                  class="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- cm inputs -->
+        <div v-else class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Width (cm)</label>
             <input
-              v-model="wallWidth"
+              v-model="widthCm"
               type="number"
-              :step="wallUnit === 'feet' ? '0.5' : '1'"
               min="0"
-              :placeholder="unitPlaceholders[wallUnit].width"
+              placeholder="e.g., 300"
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Height ({{ unitLabels[wallUnit] }})</label>
+            <label class="block text-xs text-gray-400 mb-1">Height (cm)</label>
             <input
-              v-model="wallHeight"
+              v-model="heightCm"
               type="number"
-              :step="wallUnit === 'feet' ? '0.5' : '1'"
               min="0"
-              :placeholder="unitPlaceholders[wallUnit].height"
+              placeholder="e.g., 250"
             />
           </div>
         </div>
         <p class="text-xs text-gray-500 mt-2">
           Providing wall dimensions helps with accurate frame placement
         </p>
+      </div>
+
+      <!-- Cropped Result Preview -->
+      <div v-if="!useBlankColor && croppedImage?.dataUrl" class="card mb-4">
+        <h3 class="font-semibold mb-2">Cropped Result</h3>
+        <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden">
+          <img
+            :src="croppedImage.dataUrl"
+            alt="Cropped preview"
+            class="w-full h-full object-cover"
+          />
+        </div>
+        <div class="mt-2 text-xs text-gray-500 text-center">
+          {{ croppedImage.width }} x {{ croppedImage.height }} pixels
+        </div>
       </div>
 
       <div class="flex gap-4">
