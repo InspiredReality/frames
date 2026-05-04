@@ -401,16 +401,19 @@ const toggleWallUnit = () => {
 }
 
 const startEditWall = () => {
+  // Default to ft & in
+  const wFtIn = cmToFtIn(wall.value?.width_cm || 0)
+  const hFtIn = cmToFtIn(wall.value?.height_cm || 0)
   wallEdit.value = {
     name: wall.value?.name || '',
     description: wall.value?.description || '',
     width: wall.value?.width_cm || 0,
     height: wall.value?.height_cm || 0,
-    unit: 'cm',
-    widthFt: 0,
-    widthIn: 0,
-    heightFt: 0,
-    heightIn: 0
+    unit: 'ft',
+    widthFt: wFtIn.ft,
+    widthIn: wFtIn.inches,
+    heightFt: hFtIn.ft,
+    heightIn: hFtIn.inches
   }
   editingWall.value = true
 }
@@ -766,16 +769,16 @@ const getFrameDimensions = (frame) => {
             <button
               @click="toggleWallUnit"
               class="px-3 py-1 rounded text-xs font-medium transition"
-              :class="wallEdit.unit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+              :class="wallEdit.unit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
             >
-              cm
+              ft &amp; in
             </button>
             <button
               @click="toggleWallUnit"
               class="px-3 py-1 rounded text-xs font-medium transition"
-              :class="wallEdit.unit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+              :class="wallEdit.unit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
             >
-              ft &amp; in
+              cm
             </button>
           </div>
           <!-- cm inputs -->
