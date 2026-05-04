@@ -81,6 +81,26 @@ export const useWallsStore = defineStore('walls', () => {
     return response.data.wall
   }
 
+  async function updateWallImage(wallId, file) {
+    const formData = new FormData()
+    formData.append('image', file)
+
+    const response = await api.put(`/walls/${wallId}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+
+    // Update local state
+    const index = walls.value.findIndex(w => w.id === wallId)
+    if (index !== -1) {
+      walls.value[index] = response.data.wall
+    }
+    if (currentWall.value?.id === wallId) {
+      currentWall.value = response.data.wall
+    }
+
+    return response.data.wall
+  }
+
   async function deleteWall(wallId) {
     await api.delete(`/walls/${wallId}`)
     walls.value = walls.value.filter(w => w.id !== wallId)
@@ -102,6 +122,7 @@ export const useWallsStore = defineStore('walls', () => {
     fetchWall,
     uploadWall,
     updateWall,
+    updateWallImage,
     addFramePlacement,
     deleteWall,
     getWallById

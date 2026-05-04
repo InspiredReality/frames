@@ -30,6 +30,13 @@ const editingWall = ref(false)
 const wallEdit = ref({ name: '', description: '', width: 0, height: 0, unit: 'cm' })
 const savingWall = ref(false)
 
+// Wall image editing state
+const showWallRecropModal = ref(false)
+const wallRecropImageUrl = ref('')
+const wallCroppedImage = ref(null)
+const savingWallImage = ref(false)
+const wallImageInput = ref(null)
+
 // Frame property editing state
 const editingFrameDimensions = ref(false)
 const frameDimensionEdit = ref({ width: 0, height: 0, unit: 'cm' })
@@ -58,7 +65,7 @@ const effectiveAspectRatio = computed(() => {
 
 // Lock body scroll when any modal is open (prevents background scrolling on mobile)
 const isAnyModalOpen = computed(() => {
-  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value)
+  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value || showWallRecropModal.value)
 })
 
 watch(isAnyModalOpen, (open) => {
@@ -394,16 +401,19 @@ const toggleWallUnit = () => {
 }
 
 const startEditWall = () => {
+  // Default to ft & in
+  const wFtIn = cmToFtIn(wall.value?.width_cm || 0)
+  const hFtIn = cmToFtIn(wall.value?.height_cm || 0)
   wallEdit.value = {
     name: wall.value?.name || '',
     description: wall.value?.description || '',
     width: wall.value?.width_cm || 0,
     height: wall.value?.height_cm || 0,
-    unit: 'cm',
-    widthFt: 0,
-    widthIn: 0,
-    heightFt: 0,
-    heightIn: 0
+    unit: 'ft',
+    widthFt: wFtIn.ft,
+    widthIn: wFtIn.inches,
+    heightFt: hFtIn.ft,
+    heightIn: hFtIn.inches
   }
   editingWall.value = true
 }
@@ -435,6 +445,60 @@ const saveWall = async () => {
     error.value = 'Failed to update wall'
   } finally {
     savingWall.value = false
+  }
+}
+
+// Wall image editing (recrop and upload)
+const startWallRecrop = () => {
+  wallRecropImageUrl.value = getImageUrl(wall.value.original_image_path || wall.value.image_path)
+  wallCroppedImage.value = null
+  showWallRecropModal.value = true
+}
+
+const handleWallCrop = (cropData) => {
+  wallCroppedImage.value = cropData
+}
+
+const cancelWallRecrop = () => {
+  showWallRecropModal.value = false
+  wallCroppedImage.value = null
+}
+
+const saveWallRecrop = async () => {
+  if (!wallCroppedImage.value) return
+
+  savingWallImage.value = true
+  try {
+    const file = new File([wallCroppedImage.value.blob], 'wall-recropped.jpg', { type: 'image/jpeg' })
+    await wallsStore.updateWallImage(wall.value.id, file)
+    showWallRecropModal.value = false
+    wallCroppedImage.value = null
+  } catch (err) {
+    console.error('Failed to save wall image:', err)
+    error.value = 'Failed to save wall image'
+  } finally {
+    savingWallImage.value = false
+  }
+}
+
+const triggerWallImageUpload = () => {
+  wallImageInput.value?.click()
+}
+
+const handleWallImageUpload = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  savingWallImage.value = true
+  try {
+    await wallsStore.updateWallImage(wall.value.id, file)
+  } catch (err) {
+    console.error('Failed to upload wall image:', err)
+    error.value = 'Failed to upload wall image'
+  } finally {
+    savingWallImage.value = false
+    // Reset input so same file can be selected again
+    if (wallImageInput.value) wallImageInput.value.value = ''
   }
 }
 
@@ -705,16 +769,16 @@ const getFrameDimensions = (frame) => {
             <button
               @click="toggleWallUnit"
               class="px-3 py-1 rounded text-xs font-medium transition"
-              :class="wallEdit.unit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+              :class="wallEdit.unit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
             >
-              cm
+              ft &amp; in
             </button>
             <button
               @click="toggleWallUnit"
               class="px-3 py-1 rounded text-xs font-medium transition"
-              :class="wallEdit.unit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
+              :class="wallEdit.unit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-gray-400 border border-gray-600'"
             >
-              ft &amp; in
+              cm
             </button>
           </div>
           <!-- cm inputs -->
@@ -793,7 +857,29 @@ const getFrameDimensions = (frame) => {
               </div>
             </div>
           </div>
-          <div class="flex gap-3">
+
+          <!-- Wall Image Actions -->
+          <div class="border-t border-gray-700 pt-4 mt-4">
+            <label class="block text-sm text-gray-400 mb-2">Wall Photo</label>
+            <div class="flex gap-2">
+              <button
+                @click="startWallRecrop"
+                :disabled="savingWallImage"
+                class="btn btn-secondary flex-1 text-sm"
+              >
+                Recrop Photo
+              </button>
+              <button
+                @click="triggerWallImageUpload"
+                :disabled="savingWallImage"
+                class="btn btn-secondary flex-1 text-sm"
+              >
+                {{ savingWallImage ? 'Uploading...' : 'Upload New Photo' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-4">
             <button
               @click="cancelEditWall"
               class="btn btn-secondary flex-1 text-sm"
@@ -810,6 +896,15 @@ const getFrameDimensions = (frame) => {
           </div>
         </div>
       </div>
+
+      <!-- Hidden file input for wall image upload -->
+      <input
+        ref="wallImageInput"
+        type="file"
+        accept="image/*"
+        class="hidden"
+        @change="handleWallImageUpload"
+      />
 
       <!-- Placed frames list -->
       <div class="card">
@@ -1308,6 +1403,51 @@ const getFrameDimensions = (frame) => {
             class="btn btn-primary"
           >
             {{ savingRecrop ? 'Saving...' : 'Save Crop' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wall Recrop modal -->
+    <div
+      v-if="showWallRecropModal"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[60]"
+      @click.self="cancelWallRecrop"
+    >
+      <div class="card max-w-5xl w-full max-h-[95vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold">Recrop Wall Photo</h2>
+          <button @click="cancelWallRecrop" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-sm text-gray-400 mb-4">
+          Drag the corners or edges to select the wall area you want to keep
+        </p>
+
+        <div class="mb-6">
+          <ImageCropper
+            :imageUrl="wallRecropImageUrl"
+            @crop="handleWallCrop"
+          />
+        </div>
+
+        <div class="flex gap-3 justify-end">
+          <button
+            @click="cancelWallRecrop"
+            class="btn bg-gray-600 hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            @click="saveWallRecrop"
+            :disabled="!wallCroppedImage || savingWallImage"
+            class="btn btn-primary"
+          >
+            {{ savingWallImage ? 'Saving...' : 'Save Crop' }}
           </button>
         </div>
       </div>

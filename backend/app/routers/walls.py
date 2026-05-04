@@ -207,6 +207,64 @@ def update_wall(
     return {"message": "Wall updated", "wall": wall.to_dict()}
 
 
+@router.put("/{wall_id}/image", status_code=200)
+async def update_wall_image(
+    wall_id: int,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update the wall image (for re-cropping or uploading new photo)."""
+    wall = (
+        db.query(Wall)
+        .filter(Wall.id == wall_id, Wall.user_id == current_user.id)
+        .first()
+    )
+    if not wall:
+        raise HTTPException(status_code=404, detail="Wall not found")
+
+    if not image.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    if not allowed_file(image.filename):
+        raise HTTPException(status_code=400, detail="File type not allowed")
+
+    upload_folder = Path(settings.UPLOAD_FOLDER) / "walls"
+    upload_folder.mkdir(parents=True, exist_ok=True)
+    upload_root = Path(settings.UPLOAD_FOLDER)
+
+    # Delete old image files (but keep original if exists)
+    if wall.image_path and wall.image_path != wall.original_image_path:
+        try:
+            (upload_root / wall.image_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+    if wall.thumbnail_path:
+        try:
+            (upload_root / wall.thumbnail_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Save new image
+    safe_name = os.path.basename(image.filename)
+    unique_filename = f"{current_user.id}_{_rand_suffix()}_{safe_name}"
+    file_path = upload_folder / unique_filename
+
+    with open(file_path, "wb") as f:
+        f.write(await image.read())
+
+    # Process image and create thumbnail
+    thumbnail_path = process_wall_image(str(file_path), str(upload_folder))
+
+    wall.image_path = f"walls/{unique_filename}"
+    wall.thumbnail_path = f"walls/{os.path.basename(thumbnail_path)}" if thumbnail_path else None
+
+    db.commit()
+    db.refresh(wall)
+
+    return {"message": "Wall image updated", "wall": wall.to_dict()}
+
+
 @router.delete("/{wall_id}", status_code=200)
 def delete_wall(
     wall_id: int,

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
+import QrCodeCard from '@/components/QrCodeCard.vue'
 import { useWallsStore } from '@/store/walls'
 
 const router = useRouter()
@@ -184,6 +185,13 @@ const saveWall = async () => {
       </div>
     </div>
 
+    <!-- Step labels -->
+    <div class="flex justify-center gap-8 mb-6 text-sm text-gray-400">
+      <span :class="step >= 1 ? 'text-primary-400' : ''">1. Take/Upload Photo</span>
+      <span :class="step >= 2 ? 'text-primary-400' : ''">2. Crop & Size</span>
+      <span :class="step >= 3 ? 'text-primary-400' : ''">3. Save to Gallery</span>
+    </div>
+
     <!-- Error message -->
     <div v-if="error" class="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400">
       {{ error }}
@@ -193,10 +201,14 @@ const saveWall = async () => {
     <div v-if="step === 1">
       <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Wall</h2>
       <p class="text-gray-400 text-center mb-6">
-        Take a photo of the wall or use a blank color background
+        Take or upload a photo of the wall or use a blank color background
       </p>
 
       <CameraCapture @capture="onCapture" @error="onCameraError" />
+
+      <div class="mt-6">
+        <QrCodeCard />
+      </div>
 
       <div class="mt-6 text-center">
         <div class="flex items-center gap-4 mb-4">
@@ -217,7 +229,7 @@ const saveWall = async () => {
     <div v-if="step === 2" class="max-w-2xl mx-auto">
       <h2 class="text-2xl font-bold mb-4 text-center">Crop Your Wall Photo</h2>
       <p class="text-gray-400 text-center mb-6">
-        Drag the corners or edges to select the wall area
+        Drag the corners to select the wall area
       </p>
 
       <div class="card mb-4">
@@ -254,7 +266,10 @@ const saveWall = async () => {
 
     <!-- Step 3: Wall Details -->
     <div v-if="step === 3" class="card">
-      <h2 class="text-2xl font-bold mb-4">Wall Details</h2>
+      <h2 class="text-2xl font-bold mb-4 text-center">Wall Details</h2>
+      <p class="text-gray-400 text-center mb-6">
+        Enter width and height dimensions of your wall
+      </p>
 
       <!-- Preview of cropped image -->
       <div v-if="!useBlankColor && croppedImage" class="mb-6">

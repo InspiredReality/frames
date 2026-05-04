@@ -170,9 +170,9 @@ const savePicture = async () => {
 
     <!-- Step labels -->
     <div class="flex justify-center gap-8 mb-6 text-sm text-gray-400">
-      <span :class="step >= 1 ? 'text-primary-400' : ''">1. Capture</span>
+      <span :class="step >= 1 ? 'text-primary-400' : ''">1. Talke/Upload Photo</span>
       <span :class="step >= 2 ? 'text-primary-400' : ''">2. Crop & Size</span>
-      <span :class="step >= 3 ? 'text-primary-400' : ''">3. Preview</span>
+      <span :class="step >= 3 ? 'text-primary-400' : ''">3. Add to Wall</span>
     </div>
 
     <!-- Error message -->
@@ -184,7 +184,7 @@ const savePicture = async () => {
     <div v-if="step === 1" class="max-w-2xl mx-auto">
       <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Frame</h2>
       <p class="text-gray-400 text-center mb-6">
-        Take a clear photo of the artwork or picture you want to add
+        Take a clear photo of the artwork or picture you want to visualize on a wall
       </p>
       <CameraCapture ref="cameraRef" @capture="onCapture" @error="onCameraError" />
       <div class="mt-6">

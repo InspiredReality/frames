@@ -1,11 +1,13 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePicturesStore } from '@/store/pictures'
 import { useWallsStore } from '@/store/walls'
 import { getUploadUrl } from '@/services/api'
 import FramePreview2D from '@/components/FramePreview2D.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 
+const router = useRouter()
 const picturesStore = usePicturesStore()
 const wallsStore = useWallsStore()
 const loading = ref(true)
@@ -32,6 +34,11 @@ const presetColors = [
   { label: 'Brown', value: '#8B4513' }
 ]
 
+// Wall edit modal state
+const editingWall = ref(null)
+const wallEditForm = ref({ name: '', description: '' })
+const savingWallEdit = ref(false)
+
 // Recrop state
 const showRecropModal = ref(false)
 const recropImageUrl = ref('')
@@ -47,7 +54,7 @@ const effectiveAspectRatio = computed(() => {
 
 // Lock body scroll when any modal is open (prevents background scrolling on mobile)
 const isAnyModalOpen = computed(() => {
-  return !!(selectedFrame.value || selectedWall.value || showRecropModal.value)
+  return !!(selectedFrame.value || selectedWall.value || showRecropModal.value || editingWall.value)
 })
 
 watch(isAnyModalOpen, (open) => {
@@ -89,8 +96,7 @@ const openFrameDetails = (frame) => {
 }
 
 const openWallDetails = (wall) => {
-  selectedWall.value = wall
-  selectedFrame.value = null
+  router.push(`/wall/${wall.id}`)
 }
 
 const closeModal = () => {
@@ -321,6 +327,38 @@ const saveWallDimensions = async () => {
   }
 }
 
+// Wall edit modal functions
+const startEditingWall = (wall) => {
+  editingWall.value = wall
+  wallEditForm.value = {
+    name: wall.name || '',
+    description: wall.description || ''
+  }
+}
+
+const cancelEditingWall = () => {
+  editingWall.value = null
+}
+
+const saveWallEdit = async () => {
+  if (!editingWall.value || !wallEditForm.value.name.trim()) return
+
+  savingWallEdit.value = true
+  try {
+    await wallsStore.updateWall(editingWall.value.id, {
+      name: wallEditForm.value.name.trim(),
+      description: wallEditForm.value.description.trim() || null
+    })
+    await wallsStore.fetchWalls()
+    editingWall.value = null
+  } catch (err) {
+    console.error('Failed to update wall:', err)
+    alert('Failed to update wall')
+  } finally {
+    savingWallEdit.value = false
+  }
+}
+
 // Recrop functionality
 const startRecrop = () => {
   if (selectedFrame.value) {
@@ -526,24 +564,46 @@ const getFrameDimensions = (frame) => {
           <div
             v-for="wall in filteredItems.walls"
             :key="'wall-' + wall.id"
-            @click="openWallDetails(wall)"
-            class="card p-3 cursor-pointer hover:ring-2 hover:ring-primary-500 transition"
+            class="card p-3 hover:border-primary-500/50 transition-colors border border-transparent"
           >
-            <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-3">
+            <div
+              class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-3 cursor-pointer"
+              @click="openWallDetails(wall)"
+            >
               <img
                 :src="getImageUrl(wall.thumbnail_path || wall.image_path)"
                 :alt="wall.name"
                 class="w-full h-full object-cover"
               />
             </div>
-            <div class="flex items-start justify-between">
-              <div>
-                <h3 class="font-medium">{{ wall.name }}</h3>
-                <p class="text-sm text-gray-400">
-                  {{ getWallFrameCount(wall) }} frame(s) assigned
-                </p>
-              </div>
-              <span class="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 rounded">Wall</span>
+            <h3 class="font-medium mb-1">{{ wall.name }}</h3>
+            <p class="text-sm text-gray-400 mb-3">
+              {{ getWallFrameCount(wall) }} frame(s) assigned
+            </p>
+            <div class="flex gap-2">
+              <button
+                @click="openWallDetails(wall)"
+                class="btn btn-primary flex-1"
+              >
+                Open
+              </button>
+              <button
+                @click="startEditingWall(wall)"
+                class="btn btn-secondary"
+                title="Edit wall"
+              >
+                ✎
+              </button>
+              <button
+                @click="deleteWall(wall.id)"
+                class="btn bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white"
+                title="Delete wall"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -1003,6 +1063,46 @@ const getFrameDimensions = (frame) => {
             class="btn btn-primary"
           >
             {{ savingRecrop ? 'Saving...' : 'Save Crop' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wall edit modal -->
+    <div
+      v-if="editingWall"
+      class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50"
+      @click.self="cancelEditingWall"
+    >
+      <div class="bg-dark-200 rounded-2xl p-6 w-full max-w-md">
+        <h2 class="text-xl font-bold mb-4">Edit Wall</h2>
+        <div class="space-y-4">
+          <input
+            v-model="wallEditForm.name"
+            type="text"
+            placeholder="Wall name *"
+            class="w-full px-4 py-3 bg-dark-300 border border-gray-600 rounded-lg focus:border-primary-500 focus:outline-none"
+          />
+          <textarea
+            v-model="wallEditForm.description"
+            placeholder="Description (optional)"
+            rows="3"
+            class="w-full px-4 py-3 bg-dark-300 border border-gray-600 rounded-lg focus:border-primary-500 focus:outline-none resize-none"
+          ></textarea>
+        </div>
+        <div class="flex gap-3 mt-6">
+          <button
+            @click="saveWallEdit"
+            :disabled="savingWallEdit || !wallEditForm.name.trim()"
+            class="btn btn-primary flex-1"
+          >
+            {{ savingWallEdit ? 'Saving...' : 'Save' }}
+          </button>
+          <button
+            @click="cancelEditingWall"
+            class="btn btn-secondary"
+          >
+            Cancel
           </button>
         </div>
       </div>

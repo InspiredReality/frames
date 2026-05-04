@@ -38,12 +38,6 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/walls',
-    name: 'saved-walls',
-    component: () => import('@/views/SavedWalls.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/wall/:id',
     name: 'wall-editor',
     component: () => import('@/views/WallEditor.vue'),
