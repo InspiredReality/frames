@@ -34,6 +34,11 @@ const presetColors = [
   { label: 'Brown', value: '#8B4513' }
 ]
 
+// Wall edit modal state
+const editingWall = ref(null)
+const wallEditForm = ref({ name: '', description: '' })
+const savingWallEdit = ref(false)
+
 // Recrop state
 const showRecropModal = ref(false)
 const recropImageUrl = ref('')
@@ -49,7 +54,7 @@ const effectiveAspectRatio = computed(() => {
 
 // Lock body scroll when any modal is open (prevents background scrolling on mobile)
 const isAnyModalOpen = computed(() => {
-  return !!(selectedFrame.value || selectedWall.value || showRecropModal.value)
+  return !!(selectedFrame.value || selectedWall.value || showRecropModal.value || editingWall.value)
 })
 
 watch(isAnyModalOpen, (open) => {
@@ -322,6 +327,38 @@ const saveWallDimensions = async () => {
   }
 }
 
+// Wall edit modal functions
+const startEditingWall = (wall) => {
+  editingWall.value = wall
+  wallEditForm.value = {
+    name: wall.name || '',
+    description: wall.description || ''
+  }
+}
+
+const cancelEditingWall = () => {
+  editingWall.value = null
+}
+
+const saveWallEdit = async () => {
+  if (!editingWall.value || !wallEditForm.value.name.trim()) return
+
+  savingWallEdit.value = true
+  try {
+    await wallsStore.updateWall(editingWall.value.id, {
+      name: wallEditForm.value.name.trim(),
+      description: wallEditForm.value.description.trim() || null
+    })
+    await wallsStore.fetchWalls()
+    editingWall.value = null
+  } catch (err) {
+    console.error('Failed to update wall:', err)
+    alert('Failed to update wall')
+  } finally {
+    savingWallEdit.value = false
+  }
+}
+
 // Recrop functionality
 const startRecrop = () => {
   if (selectedFrame.value) {
@@ -529,7 +566,10 @@ const getFrameDimensions = (frame) => {
             :key="'wall-' + wall.id"
             class="card p-3 hover:border-primary-500/50 transition-colors border border-transparent"
           >
-            <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-3">
+            <div
+              class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-3 cursor-pointer"
+              @click="openWallDetails(wall)"
+            >
               <img
                 :src="getImageUrl(wall.thumbnail_path || wall.image_path)"
                 :alt="wall.name"
@@ -548,7 +588,7 @@ const getFrameDimensions = (frame) => {
                 Open
               </button>
               <button
-                @click="openWallDetails(wall)"
+                @click="startEditingWall(wall)"
                 class="btn btn-secondary"
                 title="Edit wall"
               >
@@ -1023,6 +1063,46 @@ const getFrameDimensions = (frame) => {
             class="btn btn-primary"
           >
             {{ savingRecrop ? 'Saving...' : 'Save Crop' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wall edit modal -->
+    <div
+      v-if="editingWall"
+      class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50"
+      @click.self="cancelEditingWall"
+    >
+      <div class="bg-dark-200 rounded-2xl p-6 w-full max-w-md">
+        <h2 class="text-xl font-bold mb-4">Edit Wall</h2>
+        <div class="space-y-4">
+          <input
+            v-model="wallEditForm.name"
+            type="text"
+            placeholder="Wall name *"
+            class="w-full px-4 py-3 bg-dark-300 border border-gray-600 rounded-lg focus:border-primary-500 focus:outline-none"
+          />
+          <textarea
+            v-model="wallEditForm.description"
+            placeholder="Description (optional)"
+            rows="3"
+            class="w-full px-4 py-3 bg-dark-300 border border-gray-600 rounded-lg focus:border-primary-500 focus:outline-none resize-none"
+          ></textarea>
+        </div>
+        <div class="flex gap-3 mt-6">
+          <button
+            @click="saveWallEdit"
+            :disabled="savingWallEdit || !wallEditForm.name.trim()"
+            class="btn btn-primary flex-1"
+          >
+            {{ savingWallEdit ? 'Saving...' : 'Save' }}
+          </button>
+          <button
+            @click="cancelEditingWall"
+            class="btn btn-secondary"
+          >
+            Cancel
           </button>
         </div>
       </div>

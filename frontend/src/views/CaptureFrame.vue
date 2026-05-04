@@ -184,7 +184,7 @@ const savePicture = async () => {
     <div v-if="step === 1" class="max-w-2xl mx-auto">
       <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Frame</h2>
       <p class="text-gray-400 text-center mb-6">
-        Take a clear photo of the artwork or picture you want to add
+        Take a clear photo of the artwork or picture you want to visualize on a wall
       </p>
       <CameraCapture ref="cameraRef" @capture="onCapture" @error="onCameraError" />
       <div class="mt-6">
