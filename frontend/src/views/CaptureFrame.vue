@@ -170,9 +170,9 @@ const savePicture = async () => {
 
     <!-- Step labels -->
     <div class="flex justify-center gap-8 mb-6 text-sm text-gray-400">
-      <span :class="step >= 1 ? 'text-primary-400' : ''">1. Capture</span>
+      <span :class="step >= 1 ? 'text-primary-400' : ''">1. Capture Image</span>
       <span :class="step >= 2 ? 'text-primary-400' : ''">2. Crop & Size</span>
-      <span :class="step >= 3 ? 'text-primary-400' : ''">3. Preview</span>
+      <span :class="step >= 3 ? 'text-primary-400' : ''">3. Add to Wall</span>
     </div>
 
     <!-- Error message -->

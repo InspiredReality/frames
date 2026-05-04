@@ -29,11 +29,11 @@ const logout = () => {
         <!-- Desktop Navigation -->
         <div class="hidden md:flex items-center space-x-6">
           <template v-if="authStore.isAuthenticated">
-            <router-link to="/capture/frame" class="text-gray-300 hover:text-white transition">
-              Capture Frame
-            </router-link>
             <router-link to="/capture/wall" class="text-gray-300 hover:text-white transition">
               Capture Wall
+            </router-link>
+            <router-link to="/capture/frame" class="text-gray-300 hover:text-white transition">
+              Capture Frame
             </router-link>
             <router-link to="/gallery" class="text-gray-300 hover:text-white transition">
               Gallery
@@ -67,11 +67,11 @@ const logout = () => {
       <!-- Mobile Navigation -->
       <div v-if="menuOpen" class="md:hidden pb-4">
         <template v-if="authStore.isAuthenticated">
-          <router-link to="/capture/frame" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
-            Capture Frame
-          </router-link>
           <router-link to="/capture/wall" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
             Capture Wall
+          </router-link>
+          <router-link to="/capture/frame" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
+            Capture Frame
           </router-link>
           <router-link to="/gallery" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
             Gallery
