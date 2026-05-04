@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
@@ -15,14 +15,9 @@ const croppedImage = ref(null)
 const wallName = ref('')
 const wallDescription = ref('')
 const wallUnit = ref('ft') // 'ft' or 'cm'
-// For ft & in mode
-const widthFt = ref('')
-const widthIn = ref('')
-const heightFt = ref('')
-const heightIn = ref('')
-// For cm mode
-const widthCm = ref('')
-const heightCm = ref('')
+// Source of truth - always stored in cm
+const wallWidthCm = ref(0)
+const wallHeightCm = ref(0)
 const loading = ref(false)
 const error = ref('')
 
@@ -44,73 +39,77 @@ const wallColorPresets = [
 const INCHES_PER_FOOT = 12
 const CM_PER_INCH = 2.54
 
-// Convert cm to feet and inches
-const cmToFtIn = (cm) => {
-  if (!cm) return { ft: '', inches: '' }
-  const totalInches = cm / CM_PER_INCH
-  const ft = Math.floor(totalInches / INCHES_PER_FOOT)
-  const inches = Math.round(totalInches % INCHES_PER_FOOT)
-  return { ft: ft || '', inches: inches || '' }
-}
-
-// Convert feet and inches to cm
-const ftInToCm = (ft, inches) => {
-  const ftNum = parseFloat(ft) || 0
-  const inNum = parseFloat(inches) || 0
-  const totalInches = (ftNum * INCHES_PER_FOOT) + inNum
-  return totalInches * CM_PER_INCH
-}
-
-// Switch to ft & in mode
-const selectFtIn = () => {
-  if (wallUnit.value === 'ft') return
-
-  // Convert cm values to ft & in
-  const wCm = parseFloat(widthCm.value) || 0
-  const hCm = parseFloat(heightCm.value) || 0
-
-  const wFtIn = cmToFtIn(wCm)
-  const hFtIn = cmToFtIn(hCm)
-
-  widthFt.value = wFtIn.ft
-  widthIn.value = wFtIn.inches
-  heightFt.value = hFtIn.ft
-  heightIn.value = hFtIn.inches
-
-  wallUnit.value = 'ft'
-}
-
-// Switch to cm mode
-const selectCm = () => {
-  if (wallUnit.value === 'cm') return
-
-  // Convert ft & in values to cm
-  const wCm = ftInToCm(widthFt.value, widthIn.value)
-  const hCm = ftInToCm(heightFt.value, heightIn.value)
-
-  widthCm.value = wCm ? Math.round(wCm) : ''
-  heightCm.value = hCm ? Math.round(hCm) : ''
-
-  wallUnit.value = 'cm'
-}
-
-// Get width in cm for saving
-const getWidthInCm = () => {
-  if (wallUnit.value === 'cm') {
-    return parseFloat(widthCm.value) || null
+// Computed display values for ft & in mode (derived from cm source of truth)
+const displayWidthFt = computed({
+  get: () => {
+    if (!wallWidthCm.value) return ''
+    const totalInches = wallWidthCm.value / CM_PER_INCH
+    return Math.floor(totalInches / INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(val) || 0
+    const inches = parseFloat(displayWidthIn.value) || 0
+    wallWidthCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
   }
-  const cm = ftInToCm(widthFt.value, widthIn.value)
-  return cm || null
-}
+})
 
-// Get height in cm for saving
-const getHeightInCm = () => {
-  if (wallUnit.value === 'cm') {
-    return parseFloat(heightCm.value) || null
+const displayWidthIn = computed({
+  get: () => {
+    if (!wallWidthCm.value) return ''
+    const totalInches = wallWidthCm.value / CM_PER_INCH
+    return Math.round(totalInches % INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(displayWidthFt.value) || 0
+    const inches = parseFloat(val) || 0
+    wallWidthCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
   }
-  const cm = ftInToCm(heightFt.value, heightIn.value)
-  return cm || null
-}
+})
+
+const displayHeightFt = computed({
+  get: () => {
+    if (!wallHeightCm.value) return ''
+    const totalInches = wallHeightCm.value / CM_PER_INCH
+    return Math.floor(totalInches / INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(val) || 0
+    const inches = parseFloat(displayHeightIn.value) || 0
+    wallHeightCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
+  }
+})
+
+const displayHeightIn = computed({
+  get: () => {
+    if (!wallHeightCm.value) return ''
+    const totalInches = wallHeightCm.value / CM_PER_INCH
+    return Math.round(totalInches % INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(displayHeightFt.value) || 0
+    const inches = parseFloat(val) || 0
+    wallHeightCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
+  }
+})
+
+// Computed display values for cm mode
+const displayWidthCm = computed({
+  get: () => wallWidthCm.value ? Math.round(wallWidthCm.value) : '',
+  set: (val) => { wallWidthCm.value = parseFloat(val) || 0 }
+})
+
+const displayHeightCm = computed({
+  get: () => wallHeightCm.value ? Math.round(wallHeightCm.value) : '',
+  set: (val) => { wallHeightCm.value = parseFloat(val) || 0 }
+})
+
+// Toggle functions - just change display unit, no conversion needed
+const selectFtIn = () => { wallUnit.value = 'ft' }
+const selectCm = () => { wallUnit.value = 'cm' }
+
+// Get values in cm for saving (source of truth)
+const getWidthInCm = () => wallWidthCm.value || null
+const getHeightInCm = () => wallHeightCm.value || null
 
 const onCapture = (data) => {
   capturedImage.value = data
@@ -332,7 +331,7 @@ const saveWall = async () => {
             <div class="flex gap-2">
               <div class="flex-1">
                 <input
-                  v-model="widthFt"
+                  v-model="displayWidthFt"
                   type="number"
                   min="0"
                   placeholder="ft"
@@ -341,7 +340,7 @@ const saveWall = async () => {
               </div>
               <div class="flex-1">
                 <input
-                  v-model="widthIn"
+                  v-model="displayWidthIn"
                   type="number"
                   min="0"
                   max="11"
@@ -356,7 +355,7 @@ const saveWall = async () => {
             <div class="flex gap-2">
               <div class="flex-1">
                 <input
-                  v-model="heightFt"
+                  v-model="displayHeightFt"
                   type="number"
                   min="0"
                   placeholder="ft"
@@ -365,7 +364,7 @@ const saveWall = async () => {
               </div>
               <div class="flex-1">
                 <input
-                  v-model="heightIn"
+                  v-model="displayHeightIn"
                   type="number"
                   min="0"
                   max="11"
@@ -382,7 +381,7 @@ const saveWall = async () => {
           <div>
             <label class="block text-xs text-gray-400 mb-1">Width (cm)</label>
             <input
-              v-model="widthCm"
+              v-model="displayWidthCm"
               type="number"
               min="0"
               placeholder="e.g., 300"
@@ -391,7 +390,7 @@ const saveWall = async () => {
           <div>
             <label class="block text-xs text-gray-400 mb-1">Height (cm)</label>
             <input
-              v-model="heightCm"
+              v-model="displayHeightCm"
               type="number"
               min="0"
               placeholder="e.g., 250"
@@ -406,13 +405,11 @@ const saveWall = async () => {
       <!-- Cropped Result Preview -->
       <div v-if="!useBlankColor && croppedImage?.dataUrl" class="card mb-4">
         <h3 class="font-semibold mb-2">Cropped Result</h3>
-        <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden">
-          <img
-            :src="croppedImage.dataUrl"
-            alt="Cropped preview"
-            class="w-full h-full object-cover"
-          />
-        </div>
+        <img
+          :src="croppedImage.dataUrl"
+          alt="Cropped preview"
+          class="w-full rounded-lg"
+        />
         <div class="mt-2 text-xs text-gray-500 text-center">
           {{ croppedImage.width }} x {{ croppedImage.height }} pixels
         </div>
