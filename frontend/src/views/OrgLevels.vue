@@ -1,16 +1,17 @@
 <template>
-  <div class="min-h-screen bg-dark-400 text-white">
-    <div class="max-w-4xl mx-auto px-4 py-6">
+  <!-- Fixed below the sticky navbar (top-16 = 64px = h-16). Owns its own scroll. -->
+  <div class="fixed inset-x-0 bottom-0 top-16 bg-dark-400 text-white flex flex-col z-10">
+    <div class="max-w-4xl mx-auto w-full flex flex-col flex-1 min-h-0 px-4">
 
       <!-- Header -->
-      <div class="flex items-center gap-3 mb-6">
+      <div class="flex items-center gap-3 py-4 shrink-0">
         <button
           @click="$router.push('/realities')"
-          class="text-gray-400 hover:text-white transition text-sm"
+          class="text-gray-400 hover:text-white transition text-sm shrink-0"
         >
           ← Realities
         </button>
-        <div class="flex-1">
+        <div class="flex-1 min-w-0">
           <OrgBreadcrumb
             v-if="store.currentReality"
             :reality-name="store.currentReality.name"
@@ -35,8 +36,8 @@
         Reality not found.
       </div>
 
-      <!-- Panels -->
-      <div v-else class="flex flex-col gap-4 overflow-y-auto" style="max-height: calc(100vh - 140px)">
+      <!-- Panels — the ONLY scroll area on this page -->
+      <div v-else class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 pb-6">
         <OrgObPanel
           v-for="panel in panels"
           :key="panel.level"
