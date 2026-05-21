@@ -46,6 +46,7 @@
           @add="addOrgOb(panel, $event)"
           @edit="openEditModal($event)"
           @delete="confirmDelete($event, panel)"
+          @reorder="reorderPanel(panel, $event)"
         />
 
         <!-- Loading next panel -->
@@ -186,11 +187,21 @@ function openEditModal(orgOb) {
 
 async function saveEdit() {
   if (!editForm.value.name.trim()) return
-  await store.updateOrgOb(editingOrgOb.value.id, {
+  const updated = await store.updateOrgOb(editingOrgOb.value.id, {
     name: editForm.value.name.trim(),
     description: editForm.value.description.trim() || null,
   })
+  // Refresh selectedPath so the breadcrumb and panel headers reflect the new name
+  const pathIdx = selectedPath.value.findIndex(n => n.id === updated.id)
+  if (pathIdx !== -1) {
+    selectedPath.value = selectedPath.value.map((n, i) => i === pathIdx ? updated : n)
+  }
   editingOrgOb.value = null
+}
+
+async function reorderPanel(panel, orderedIds) {
+  const parentId = panel.parentOrgOb ? panel.parentOrgOb.id : null
+  await store.reorderOrgObs(realityId, parentId, orderedIds)
 }
 
 async function confirmDelete(orgOb, panel) {

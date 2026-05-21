@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/services/api'
+import { getUploadUrl } from '@/services/api'
 
 export const useRealitiesStore = defineStore('realities', () => {
   const realities = ref([])
@@ -63,6 +64,24 @@ export const useRealitiesStore = defineStore('realities', () => {
     if (currentReality.value?.id === id) currentReality.value = null
   }
 
+  async function uploadRealityImage(id, file) {
+    const formData = new FormData()
+    formData.append('image', file)
+    const res = await api.post(`/realities/${id}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    const updated = res.data.reality
+    const idx = realities.value.findIndex(r => r.id === id)
+    if (idx !== -1) realities.value[idx] = updated
+    if (currentReality.value?.id === id) currentReality.value = updated
+    return updated
+  }
+
+  function getRealityImageUrl(imagePath) {
+    if (!imagePath) return null
+    return getUploadUrl(imagePath)
+  }
+
   // ----------------------------
   // OrgOb lazy-load
   // ----------------------------
@@ -121,7 +140,39 @@ export const useRealitiesStore = defineStore('realities', () => {
     const res = await api.put(`/org-obs/${id}`, data)
     const updated = res.data.org_ob
     orgObCache.value[id] = updated
+
+    // Also replace the node inside whichever list renders it
+    if (updated.parent_id === null) {
+      const key = `top:${updated.reality_id}`
+      if (orgObCache.value[key]) {
+        orgObCache.value[key] = orgObCache.value[key].map(o => o.id === id ? updated : o)
+      }
+    } else {
+      const parent = orgObCache.value[updated.parent_id]
+      if (parent?.children) {
+        parent.children = parent.children.map(c => c.id === id ? updated : c)
+      }
+    }
+
     return updated
+  }
+
+  async function reorderOrgObs(realityId, parentId, orderedIds) {
+    // Optimistically update the cache list immediately so the UI doesn't jump back
+    const applyOrder = (list) =>
+      orderedIds.map(id => list.find(o => o.id === id)).filter(Boolean)
+
+    if (parentId === null) {
+      const key = `top:${realityId}`
+      if (orgObCache.value[key]) orgObCache.value[key] = applyOrder(orgObCache.value[key])
+    } else {
+      const parent = orgObCache.value[parentId]
+      if (parent?.children) parent.children = applyOrder(parent.children)
+    }
+
+    await api.post('/org-obs/reorder', {
+      items: orderedIds.map((id, index) => ({ id, order_index: index })),
+    })
   }
 
   async function deleteOrgOb(id, parentId, realityId) {
@@ -171,7 +222,10 @@ export const useRealitiesStore = defineStore('realities', () => {
     createReality,
     updateReality,
     deleteReality,
+    uploadRealityImage,
+    getRealityImageUrl,
     fetchTopLevel,
+    reorderOrgObs,
     fetchOrgOb,
     createOrgOb,
     updateOrgOb,

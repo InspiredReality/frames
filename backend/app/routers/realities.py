@@ -1,15 +1,21 @@
 """Realities router — CRUD for Reality and top-level OrgOb operations."""
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.settings import settings
 from app.db import get_db
 from app.models import User
 from app.models.reality import Reality
 from app.models.org_ob import OrgOb
+from app.models.tag import Tag
 from app.routers.auth import get_current_user
+from app.services.image_processor import process_wall_image
+from app.utils.uploads import make_safe_filename, save_upload_with_limit
 
 router = APIRouter()
 
@@ -26,6 +32,9 @@ class RealityCreateRequest(BaseModel):
 class RealityUpdateRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=100)
     description: Optional[str] = None
+    width_m: Optional[float] = None
+    length_m: Optional[float] = None
+    tag_ids: Optional[List[int]] = None
     meta: Optional[Dict[str, Any]] = None
 
 
@@ -98,11 +107,60 @@ def update_reality(
         reality.name = payload.name
     if payload.description is not None:
         reality.description = payload.description
+    if payload.width_m is not None:
+        reality.width_m = payload.width_m
+    if payload.length_m is not None:
+        reality.length_m = payload.length_m
     if payload.meta is not None:
         reality.meta = payload.meta
+
+    # Sync tags — replace the full set
+    if payload.tag_ids is not None:
+        tags = db.query(Tag).filter(
+            Tag.id.in_(payload.tag_ids),
+            Tag.user_id == current_user.id,
+        ).all()
+        reality.tags = tags
+
     db.commit()
     db.refresh(reality)
     return {"message": "Reality updated", "reality": reality.to_dict()}
+
+
+@router.post("/{reality_id}/image", status_code=200)
+async def upload_reality_image(
+    reality_id: int,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reality = db.query(Reality).filter_by(id=reality_id, user_id=current_user.id).first()
+    if not reality:
+        raise HTTPException(status_code=404, detail="Reality not found")
+
+    upload_folder = Path(settings.UPLOAD_FOLDER) / "realities"
+    upload_folder.mkdir(parents=True, exist_ok=True)
+    upload_root = Path(settings.UPLOAD_FOLDER)
+
+    if not image.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    safe_name = make_safe_filename(current_user.id, image.filename)
+    file_path = upload_folder / safe_name
+
+    if reality.image_path:
+        try:
+            (upload_root / reality.image_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    await save_upload_with_limit(image, file_path)
+    process_wall_image(str(file_path), str(upload_folder))
+
+    reality.image_path = f"realities/{safe_name}"
+    db.commit()
+    db.refresh(reality)
+    return {"message": "Image uploaded", "reality": reality.to_dict()}
 
 
 @router.delete("/{reality_id}", status_code=200)
@@ -153,7 +211,6 @@ def create_org_ob(
     if not reality:
         raise HTTPException(status_code=404, detail="Reality not found")
 
-    # Validate parent belongs to the same reality
     if payload.parent_id is not None:
         parent = (
             db.query(OrgOb)
