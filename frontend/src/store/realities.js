@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/services/api'
+import { getUploadUrl } from '@/services/api'
 
 export const useRealitiesStore = defineStore('realities', () => {
   const realities = ref([])
@@ -61,6 +62,24 @@ export const useRealitiesStore = defineStore('realities', () => {
     await api.delete(`/realities/${id}`)
     realities.value = realities.value.filter(r => r.id !== id)
     if (currentReality.value?.id === id) currentReality.value = null
+  }
+
+  async function uploadRealityImage(id, file) {
+    const formData = new FormData()
+    formData.append('image', file)
+    const res = await api.post(`/realities/${id}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    const updated = res.data.reality
+    const idx = realities.value.findIndex(r => r.id === id)
+    if (idx !== -1) realities.value[idx] = updated
+    if (currentReality.value?.id === id) currentReality.value = updated
+    return updated
+  }
+
+  function getRealityImageUrl(imagePath) {
+    if (!imagePath) return null
+    return getUploadUrl(imagePath)
   }
 
   // ----------------------------
@@ -171,6 +190,8 @@ export const useRealitiesStore = defineStore('realities', () => {
     createReality,
     updateReality,
     deleteReality,
+    uploadRealityImage,
+    getRealityImageUrl,
     fetchTopLevel,
     fetchOrgOb,
     createOrgOb,

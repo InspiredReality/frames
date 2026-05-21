@@ -33,9 +33,15 @@
         class="card cursor-pointer hover:border-primary-500/50 transition-colors border border-transparent"
         @click="$router.push(`/reality/${reality.id}`)"
       >
-        <!-- Icon placeholder -->
-        <div class="aspect-video bg-dark-300 rounded-lg flex items-center justify-center mb-3">
-          <svg class="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <!-- Cover image / placeholder -->
+        <div class="aspect-video bg-dark-300 rounded-lg flex items-center justify-center mb-3 overflow-hidden">
+          <img
+            v-if="reality.image_path"
+            :src="store.getRealityImageUrl(reality.image_path)"
+            class="w-full h-full object-cover"
+            :alt="reality.name"
+          />
+          <svg v-else class="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
               d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
@@ -121,10 +127,51 @@
     <div
       v-if="editingReality"
       class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
-      @click.self="editingReality = null"
+      @click.self="closeEditModal"
     >
       <div class="bg-dark-200 rounded-2xl p-6 w-full max-w-md shadow-2xl">
         <h2 class="text-lg font-semibold mb-4">Edit Reality</h2>
+
+        <!-- Photo area -->
+        <div
+          class="aspect-video bg-dark-300 rounded-lg flex items-center justify-center mb-4 overflow-hidden relative cursor-pointer group"
+          @click="triggerPhotoInput"
+        >
+          <img
+            v-if="editPhotoPreview || editingReality.image_path"
+            :src="editPhotoPreview || store.getRealityImageUrl(editingReality.image_path)"
+            class="w-full h-full object-cover"
+            alt="Cover photo"
+          />
+          <div
+            v-else
+            class="flex flex-col items-center gap-2 text-gray-500"
+          >
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span class="text-sm">Add photo</span>
+          </div>
+          <!-- Hover overlay when photo exists -->
+          <div
+            v-if="editPhotoPreview || editingReality.image_path"
+            class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+          >
+            <span class="text-white text-sm font-medium">Change photo</span>
+          </div>
+        </div>
+
+        <!-- Hidden file input — accepts gallery and camera -->
+        <input
+          ref="photoInputRef"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="onPhotoSelected"
+        />
+
         <div class="flex flex-col gap-3">
           <input
             v-model="editForm.name"
@@ -140,15 +187,16 @@
             class="bg-dark-300 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 resize-none"
           />
         </div>
+        <p v-if="editError" class="text-red-400 text-sm mt-3">{{ editError }}</p>
         <div class="flex gap-3 mt-5">
           <button
             @click="submitEdit"
             class="btn btn-primary flex-1"
-            :disabled="!editForm.name.trim()"
+            :disabled="!editForm.name.trim() || editSaving"
           >
-            Save
+            {{ editSaving ? 'Saving…' : 'Save' }}
           </button>
-          <button @click="editingReality = null" class="btn btn-secondary">Cancel</button>
+          <button @click="closeEditModal" class="btn btn-secondary">Cancel</button>
         </div>
       </div>
     </div>
@@ -171,6 +219,11 @@ const createForm = ref({ name: '', description: '' })
 // Edit modal
 const editingReality = ref(null)
 const editForm = ref({ name: '', description: '' })
+const editSaving = ref(false)
+const editError = ref('')
+const editPhotoPreview = ref(null)
+const editPhotoFile = ref(null)
+const photoInputRef = ref(null)
 
 onMounted(async () => {
   try {
@@ -211,15 +264,48 @@ async function submitCreate() {
 function startEdit(reality) {
   editingReality.value = reality
   editForm.value = { name: reality.name, description: reality.description || '' }
+  editPhotoPreview.value = null
+  editPhotoFile.value = null
+  editError.value = ''
+}
+
+function closeEditModal() {
+  editingReality.value = null
+  editPhotoPreview.value = null
+  editPhotoFile.value = null
+  editError.value = ''
+}
+
+function triggerPhotoInput() {
+  photoInputRef.value?.click()
+}
+
+function onPhotoSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  editPhotoFile.value = file
+  editPhotoPreview.value = URL.createObjectURL(file)
+  event.target.value = ''
 }
 
 async function submitEdit() {
   if (!editForm.value.name.trim()) return
-  await store.updateReality(editingReality.value.id, {
-    name: editForm.value.name.trim(),
-    description: editForm.value.description.trim() || null,
-  })
-  editingReality.value = null
+  editSaving.value = true
+  editError.value = ''
+  try {
+    await store.updateReality(editingReality.value.id, {
+      name: editForm.value.name.trim(),
+      description: editForm.value.description.trim() || null,
+    })
+    if (editPhotoFile.value) {
+      await store.uploadRealityImage(editingReality.value.id, editPhotoFile.value)
+    }
+    closeEditModal()
+  } catch (err) {
+    editError.value = err.response?.data?.detail || err.message || 'Failed to save'
+  } finally {
+    editSaving.value = false
+  }
 }
 
 async function deleteReality(id) {

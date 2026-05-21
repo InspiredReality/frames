@@ -38,6 +38,11 @@ def create_app() -> FastAPI:
                 conn.commit()
             except Exception:
                 conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE realities ADD COLUMN image_path VARCHAR(500)"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     # -------------------
     # CORS
@@ -63,6 +68,7 @@ def create_app() -> FastAPI:
     (upload_root / "frames").mkdir(parents=True, exist_ok=True)
     (upload_root / "walls").mkdir(parents=True, exist_ok=True)
     (upload_root / "models").mkdir(parents=True, exist_ok=True)
+    (upload_root / "realities").mkdir(parents=True, exist_ok=True)
 
     # -------------------
     # Routers (Blueprints -> Routers)
