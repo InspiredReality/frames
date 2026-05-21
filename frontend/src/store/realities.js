@@ -140,6 +140,20 @@ export const useRealitiesStore = defineStore('realities', () => {
     const res = await api.put(`/org-obs/${id}`, data)
     const updated = res.data.org_ob
     orgObCache.value[id] = updated
+
+    // Also replace the node inside whichever list renders it
+    if (updated.parent_id === null) {
+      const key = `top:${updated.reality_id}`
+      if (orgObCache.value[key]) {
+        orgObCache.value[key] = orgObCache.value[key].map(o => o.id === id ? updated : o)
+      }
+    } else {
+      const parent = orgObCache.value[updated.parent_id]
+      if (parent?.children) {
+        parent.children = parent.children.map(c => c.id === id ? updated : c)
+      }
+    }
+
     return updated
   }
 
