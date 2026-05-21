@@ -10,7 +10,7 @@ from app.core.settings import settings
 from app.db import engine, Base, get_db
 
 # Import models so they register with Base.metadata
-from app.models import User, Wall, Picture, PictureFrame, Reality, OrgOb  # noqa: F401
+from app.models import User, Wall, Picture, PictureFrame, Tag, reality_tags, Reality, OrgOb  # noqa: F401
 
 # Routers
 from app.routers.auth import router as auth_router
@@ -19,6 +19,7 @@ from app.routers.pictures import router as pictures_router
 from app.routers.models3d import router as models3d_router
 from app.routers.realities import router as realities_router
 from app.routers.org_obs import router as org_obs_router
+from app.routers.tags import router as tags_router
 
 
 def create_app() -> FastAPI:
@@ -40,6 +41,16 @@ def create_app() -> FastAPI:
                 conn.rollback()
         try:
             conn.execute(text("ALTER TABLE realities ADD COLUMN image_path VARCHAR(500)"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE realities ADD COLUMN width_m FLOAT"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE realities ADD COLUMN length_m FLOAT"))
             conn.commit()
         except Exception:
             conn.rollback()
@@ -79,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(models3d_router, prefix="/api/models", tags=["models"])
     app.include_router(realities_router, prefix="/api/realities", tags=["realities"])
     app.include_router(org_obs_router, prefix="/api/org-obs", tags=["org-obs"])
+    app.include_router(tags_router, prefix="/api/tags", tags=["tags"])
 
     # -------------------
     # Root + health + status

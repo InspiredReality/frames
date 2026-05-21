@@ -52,6 +52,21 @@
           {{ reality.description }}
         </p>
 
+        <!-- Dimensions badge -->
+        <p v-if="reality.width_m || reality.length_m" class="text-xs text-gray-500 mb-2">
+          {{ reality.length_m ? reality.length_m + ' m' : '—' }} × {{ reality.width_m ? reality.width_m + ' m' : '—' }}
+        </p>
+
+        <!-- Tags -->
+        <div v-if="reality.tags && reality.tags.length" class="flex flex-wrap gap-1 mb-3">
+          <span
+            v-for="tag in reality.tags"
+            :key="tag.id"
+            class="text-xs px-2 py-0.5 rounded-full font-medium"
+            :style="{ backgroundColor: tag.color + '33', color: tag.color }"
+          >{{ tag.name }}</span>
+        </div>
+
         <div class="flex items-center justify-between text-sm text-gray-500 mb-4">
           <span>{{ reality.org_ob_count }} item{{ reality.org_ob_count !== 1 ? 's' : '' }}</span>
           <span>{{ formatDate(reality.created_at) }}</span>
@@ -68,7 +83,7 @@
           <button
             @click.stop="startEdit(reality)"
             class="btn btn-secondary"
-            title="Edit name/description"
+            title="Edit"
           >
             ✎
           </button>
@@ -126,10 +141,10 @@
     <!-- Edit modal -->
     <div
       v-if="editingReality"
-      class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
+      class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4 overflow-y-auto py-8"
       @click.self="closeEditModal"
     >
-      <div class="bg-dark-200 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+      <div class="bg-dark-200 rounded-2xl p-6 w-full max-w-md shadow-2xl my-auto">
         <h2 class="text-lg font-semibold mb-4">Edit Reality</h2>
 
         <!-- Photo area -->
@@ -143,10 +158,7 @@
             class="w-full h-full object-cover"
             alt="Cover photo"
           />
-          <div
-            v-else
-            class="flex flex-col items-center gap-2 text-gray-500"
-          >
+          <div v-else class="flex flex-col items-center gap-2 text-gray-500">
             <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                 d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -154,7 +166,6 @@
             </svg>
             <span class="text-sm">Add photo</span>
           </div>
-          <!-- Hover overlay when photo exists -->
           <div
             v-if="editPhotoPreview || editingReality.image_path"
             class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
@@ -163,7 +174,6 @@
           </div>
         </div>
 
-        <!-- Hidden file input — accepts gallery and camera -->
         <input
           ref="photoInputRef"
           type="file"
@@ -173,6 +183,7 @@
         />
 
         <div class="flex flex-col gap-3">
+          <!-- Name -->
           <input
             v-model="editForm.name"
             type="text"
@@ -180,13 +191,99 @@
             maxlength="100"
             class="bg-dark-300 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
           />
+
+          <!-- Description -->
           <textarea
             v-model="editForm.description"
             placeholder="Description (optional)"
-            rows="3"
+            rows="2"
             class="bg-dark-300 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 resize-none"
           />
+
+          <!-- Dimensions -->
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="text-xs text-gray-400 mb-1 block">Length (m)</label>
+              <input
+                v-model.number="editForm.length_m"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="e.g. 10"
+                class="w-full bg-dark-300 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+            <div class="flex-1">
+              <label class="text-xs text-gray-400 mb-1 block">Width (m)</label>
+              <input
+                v-model.number="editForm.width_m"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="e.g. 8"
+                class="w-full bg-dark-300 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+          </div>
+
+          <!-- Tags -->
+          <div>
+            <label class="text-xs text-gray-400 mb-2 block">Tags</label>
+
+            <!-- Selected tags -->
+            <div v-if="editForm.selectedTags.length" class="flex flex-wrap gap-1 mb-2">
+              <button
+                v-for="tag in editForm.selectedTags"
+                :key="tag.id"
+                type="button"
+                class="text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1"
+                :style="{ backgroundColor: tag.color + '33', color: tag.color }"
+                @click="removeTag(tag)"
+              >
+                {{ tag.name }}
+                <span class="text-xs opacity-70">✕</span>
+              </button>
+            </div>
+
+            <!-- Tag search / add -->
+            <div class="relative">
+              <input
+                v-model="tagSearch"
+                type="text"
+                placeholder="Search or create tag…"
+                class="w-full bg-dark-300 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                @focus="showTagDropdown = true"
+                @blur="onTagBlur"
+                @keydown.enter.prevent="onTagEnter"
+              />
+              <div
+                v-if="showTagDropdown && (filteredTags.length || tagSearch.trim())"
+                class="absolute z-10 w-full mt-1 bg-dark-100 border border-gray-600 rounded-lg shadow-xl overflow-hidden"
+              >
+                <button
+                  v-for="tag in filteredTags"
+                  :key="tag.id"
+                  type="button"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-dark-300 flex items-center gap-2"
+                  @mousedown.prevent="selectTag(tag)"
+                >
+                  <span class="w-2 h-2 rounded-full flex-shrink-0" :style="{ backgroundColor: tag.color }"></span>
+                  {{ tag.name }}
+                </button>
+                <button
+                  v-if="tagSearch.trim() && !exactTagMatch"
+                  type="button"
+                  class="w-full text-left px-3 py-2 text-sm text-primary-400 hover:bg-dark-300 flex items-center gap-2"
+                  @mousedown.prevent="createAndSelectTag"
+                >
+                  <span class="text-lg leading-none">+</span>
+                  Create "{{ tagSearch.trim() }}"
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+
         <p v-if="editError" class="text-red-400 text-sm mt-3">{{ editError }}</p>
         <div class="flex gap-3 mt-5">
           <button
@@ -204,10 +301,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRealitiesStore } from '@/store/realities'
+import { useTagsStore } from '@/store/tags'
 
 const store = useRealitiesStore()
+const tagsStore = useTagsStore()
 const loading = ref(true)
 
 // Create modal
@@ -218,16 +317,32 @@ const createForm = ref({ name: '', description: '' })
 
 // Edit modal
 const editingReality = ref(null)
-const editForm = ref({ name: '', description: '' })
+const editForm = ref({ name: '', description: '', length_m: null, width_m: null, selectedTags: [] })
 const editSaving = ref(false)
 const editError = ref('')
 const editPhotoPreview = ref(null)
 const editPhotoFile = ref(null)
 const photoInputRef = ref(null)
 
+// Tag picker
+const tagSearch = ref('')
+const showTagDropdown = ref(false)
+
+const filteredTags = computed(() => {
+  const q = tagSearch.value.trim().toLowerCase()
+  const selectedIds = new Set(editForm.value.selectedTags.map(t => t.id))
+  return tagsStore.tags.filter(t =>
+    !selectedIds.has(t.id) && (!q || t.name.toLowerCase().includes(q))
+  )
+})
+
+const exactTagMatch = computed(() =>
+  tagsStore.tags.some(t => t.name.toLowerCase() === tagSearch.value.trim().toLowerCase())
+)
+
 onMounted(async () => {
   try {
-    await store.fetchRealities()
+    await Promise.all([store.fetchRealities(), tagsStore.fetchTags()])
   } finally {
     loading.value = false
   }
@@ -263,10 +378,18 @@ async function submitCreate() {
 
 function startEdit(reality) {
   editingReality.value = reality
-  editForm.value = { name: reality.name, description: reality.description || '' }
+  editForm.value = {
+    name: reality.name,
+    description: reality.description || '',
+    length_m: reality.length_m ?? null,
+    width_m: reality.width_m ?? null,
+    selectedTags: [...(reality.tags || [])],
+  }
   editPhotoPreview.value = null
   editPhotoFile.value = null
   editError.value = ''
+  tagSearch.value = ''
+  showTagDropdown.value = false
 }
 
 function closeEditModal() {
@@ -274,6 +397,8 @@ function closeEditModal() {
   editPhotoPreview.value = null
   editPhotoFile.value = null
   editError.value = ''
+  tagSearch.value = ''
+  showTagDropdown.value = false
 }
 
 function triggerPhotoInput() {
@@ -288,6 +413,42 @@ function onPhotoSelected(event) {
   event.target.value = ''
 }
 
+// Tag helpers
+function selectTag(tag) {
+  if (!editForm.value.selectedTags.find(t => t.id === tag.id)) {
+    editForm.value.selectedTags.push(tag)
+  }
+  tagSearch.value = ''
+  showTagDropdown.value = false
+}
+
+function removeTag(tag) {
+  editForm.value.selectedTags = editForm.value.selectedTags.filter(t => t.id !== tag.id)
+}
+
+async function createAndSelectTag() {
+  const name = tagSearch.value.trim()
+  if (!name) return
+  try {
+    const tag = await tagsStore.createTag(name)
+    selectTag(tag)
+  } catch (err) {
+    // ignore
+  }
+}
+
+function onTagEnter() {
+  if (filteredTags.value.length) {
+    selectTag(filteredTags.value[0])
+  } else if (tagSearch.value.trim() && !exactTagMatch.value) {
+    createAndSelectTag()
+  }
+}
+
+function onTagBlur() {
+  setTimeout(() => { showTagDropdown.value = false }, 150)
+}
+
 async function submitEdit() {
   if (!editForm.value.name.trim()) return
   editSaving.value = true
@@ -296,6 +457,9 @@ async function submitEdit() {
     await store.updateReality(editingReality.value.id, {
       name: editForm.value.name.trim(),
       description: editForm.value.description.trim() || null,
+      length_m: editForm.value.length_m || null,
+      width_m: editForm.value.width_m || null,
+      tag_ids: editForm.value.selectedTags.map(t => t.id),
     })
     if (editPhotoFile.value) {
       await store.uploadRealityImage(editingReality.value.id, editPhotoFile.value)
