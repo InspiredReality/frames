@@ -46,6 +46,7 @@
           @add="addOrgOb(panel, $event)"
           @edit="openEditModal($event)"
           @delete="confirmDelete($event, panel)"
+          @reorder="reorderPanel(panel, $event)"
         />
 
         <!-- Loading next panel -->
@@ -196,6 +197,11 @@ async function saveEdit() {
     selectedPath.value = selectedPath.value.map((n, i) => i === pathIdx ? updated : n)
   }
   editingOrgOb.value = null
+}
+
+async function reorderPanel(panel, orderedIds) {
+  const parentId = panel.parentOrgOb ? panel.parentOrgOb.id : null
+  await store.reorderOrgObs(realityId, parentId, orderedIds)
 }
 
 async function confirmDelete(orgOb, panel) {

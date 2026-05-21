@@ -157,6 +157,24 @@ export const useRealitiesStore = defineStore('realities', () => {
     return updated
   }
 
+  async function reorderOrgObs(realityId, parentId, orderedIds) {
+    // Optimistically update the cache list immediately so the UI doesn't jump back
+    const applyOrder = (list) =>
+      orderedIds.map(id => list.find(o => o.id === id)).filter(Boolean)
+
+    if (parentId === null) {
+      const key = `top:${realityId}`
+      if (orgObCache.value[key]) orgObCache.value[key] = applyOrder(orgObCache.value[key])
+    } else {
+      const parent = orgObCache.value[parentId]
+      if (parent?.children) parent.children = applyOrder(parent.children)
+    }
+
+    await api.post('/org-obs/reorder', {
+      items: orderedIds.map((id, index) => ({ id, order_index: index })),
+    })
+  }
+
   async function deleteOrgOb(id, parentId, realityId) {
     await api.delete(`/org-obs/${id}`)
     delete orgObCache.value[id]
@@ -207,6 +225,7 @@ export const useRealitiesStore = defineStore('realities', () => {
     uploadRealityImage,
     getRealityImageUrl,
     fetchTopLevel,
+    reorderOrgObs,
     fetchOrgOb,
     createOrgOb,
     updateOrgOb,

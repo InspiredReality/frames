@@ -1,5 +1,5 @@
 """OrgObs router — GET/PUT/DELETE for individual OrgOb nodes."""
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -23,6 +23,15 @@ class OrgObUpdateRequest(BaseModel):
     parent_id: Optional[int] = None
     meta: Optional[Dict[str, Any]] = None
     order_index: Optional[int] = None
+
+
+class ReorderItem(BaseModel):
+    id: int
+    order_index: int
+
+
+class ReorderRequest(BaseModel):
+    items: List[ReorderItem]
 
 
 # ----------------------------
@@ -59,6 +68,28 @@ def _is_descendant(candidate_parent_id: int, node_id: int, db: Session) -> bool:
 # ----------------------------
 # Routes
 # ----------------------------
+@router.post("/reorder", status_code=200)
+def reorder_org_obs(
+    payload: ReorderRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Batch-update order_index for a set of OrgObs owned by the current user."""
+    ids = [item.id for item in payload.items]
+    org_obs = (
+        db.query(OrgOb)
+        .join(Reality, OrgOb.reality_id == Reality.id)
+        .filter(OrgOb.id.in_(ids), Reality.user_id == current_user.id)
+        .all()
+    )
+    ob_map = {o.id: o for o in org_obs}
+    for item in payload.items:
+        if item.id in ob_map:
+            ob_map[item.id].order_index = item.order_index
+    db.commit()
+    return {"message": "Reordered"}
+
+
 @router.get("/{org_ob_id}", status_code=200)
 def get_org_ob(
     org_ob_id: int,
