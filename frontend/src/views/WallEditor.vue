@@ -465,12 +465,14 @@ const handleWallCrop = (cropData) => {
 const cancelWallRecrop = () => {
   showWallRecropModal.value = false
   wallCroppedImage.value = null
+  saveError.value = ''
 }
 
 const saveWallRecrop = async () => {
   if (!wallCroppedImage.value) return
 
   savingWallImage.value = true
+  saveError.value = ''
   try {
     const file = new File([wallCroppedImage.value.blob], 'wall-recropped.jpg', { type: 'image/jpeg' })
     await wallsStore.updateWallImage(wall.value.id, file)
@@ -478,7 +480,7 @@ const saveWallRecrop = async () => {
     wallCroppedImage.value = null
   } catch (err) {
     console.error('Failed to save wall image:', err)
-    error.value = 'Failed to save wall image'
+    saveError.value = 'Failed to save wall image. Please try again.'
   } finally {
     savingWallImage.value = false
   }
@@ -1446,6 +1448,7 @@ const getFrameDimensions = (frame) => {
             {{ savingWallImage ? 'Saving...' : 'Save Crop' }}
           </button>
         </div>
+        <p v-if="saveError" class="text-red-400 text-xs mt-3 text-center">{{ saveError }}</p>
       </div>
     </div>
   </div>
