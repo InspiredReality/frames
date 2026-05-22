@@ -230,11 +230,14 @@ const resetPosition = () => {
   editingPosition.value = { ...savedPosition.value }
 }
 
+// Default wall size when dimensions are not explicitly set: 8 ft × 8 ft
+const WALL_DEFAULT_CM = 8 * 30.48 // 243.84 cm
+
 // Position display: convert internal meters (center-based) to wall-relative measurements
-const wallWidthM = computed(() => (wall.value?.width_cm || 0) * 0.01)
-const wallHeightM = computed(() => (wall.value?.height_cm || 0) * 0.01)
-const wallWidthCmVal = computed(() => wall.value?.width_cm || 0)
-const wallHeightCmVal = computed(() => wall.value?.height_cm || 0)
+const wallWidthM = computed(() => ((wall.value?.width_cm || WALL_DEFAULT_CM) * 0.01))
+const wallHeightM = computed(() => ((wall.value?.height_cm || WALL_DEFAULT_CM) * 0.01))
+const wallWidthCmVal = computed(() => wall.value?.width_cm || WALL_DEFAULT_CM)
+const wallHeightCmVal = computed(() => wall.value?.height_cm || WALL_DEFAULT_CM)
 
 // "From left" = wallWidth/2 + x (in meters), converted to cm
 const posFromLeftCm = computed({
@@ -732,7 +735,7 @@ const getFrameDimensions = (frame) => {
                   ({{ (wall.width_cm / 2.54).toFixed(1) }}" x {{ (wall.height_cm / 2.54).toFixed(1) }}")
                 </template>
                 <template v-else>
-                  No dimensions set
+                  8 ft × 8 ft (default)
                 </template>
               </p>
             </template>

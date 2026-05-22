@@ -284,9 +284,10 @@ const createWall = () => {
     wallMesh.material.dispose()
   }
 
-  // Use wall dimensions if available (cm -> scene units at 0.01 scale), fallback to default
-  const wallW = (props.wallWidthCm > 0) ? props.wallWidthCm * 0.01 : 8
-  const wallH = (props.wallHeightCm > 0) ? props.wallHeightCm * 0.01 : 6
+  // Use wall dimensions if available (cm -> scene units at 0.01 scale), fallback to 8 ft × 8 ft
+  const defaultCm = 8 * 30.48 * 0.01 // 8 feet in scene units
+  const wallW = (props.wallWidthCm > 0) ? props.wallWidthCm * 0.01 : defaultCm
+  const wallH = (props.wallHeightCm > 0) ? props.wallHeightCm * 0.01 : defaultCm
 
   // Create wall plane
   const geometry = new THREE.PlaneGeometry(wallW, wallH)
