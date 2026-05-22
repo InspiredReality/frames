@@ -456,7 +456,9 @@ const saveWall = async () => {
 
 // Wall image editing (recrop and upload)
 const startWallRecrop = () => {
-  wallRecropImageUrl.value = getImageUrl(wall.value.original_image_path || wall.value.image_path)
+  // Cache-bust so the browser fetches a fresh CORS-enabled copy (avoids opaque-cache canvas taint)
+  const base = getImageUrl(wall.value.original_image_path || wall.value.image_path)
+  wallRecropImageUrl.value = `${base}?t=${Date.now()}`
   wallCroppedImage.value = null
   showWallRecropModal.value = true
 }
@@ -472,7 +474,10 @@ const cancelWallRecrop = () => {
 }
 
 const saveWallRecrop = async () => {
-  if (!wallCroppedImage.value) return
+  if (!wallCroppedImage.value?.blob) {
+    saveError.value = 'Unable to export cropped image. Try uploading a new photo instead.'
+    return
+  }
 
   savingWallImage.value = true
   saveError.value = ''
@@ -564,7 +569,8 @@ const saveFrameDimensions = async () => {
 // Recrop functionality
 const startRecrop = () => {
   if (!selectedPicture.value) return
-  recropImageUrl.value = getImageUrl(selectedPicture.value.original_image_path || selectedPicture.value.image_path)
+  const base = getImageUrl(selectedPicture.value.original_image_path || selectedPicture.value.image_path)
+  recropImageUrl.value = `${base}?t=${Date.now()}`
   croppedImage.value = null
   lockAspectRatio.value = true
 
@@ -593,7 +599,10 @@ const cancelRecrop = () => {
 }
 
 const saveRecrop = async () => {
-  if (!croppedImage.value || !selectedPicture.value) return
+  if (!croppedImage.value?.blob || !selectedPicture.value) {
+    saveError.value = 'Unable to export cropped image. Try uploading a new photo instead.'
+    return
+  }
 
   savingRecrop.value = true
   saveError.value = ''
@@ -1399,7 +1408,7 @@ const getFrameDimensions = (frame) => {
           </button>
           <button
             @click="saveRecrop"
-            :disabled="!croppedImage || savingRecrop"
+            :disabled="!croppedImage?.blob || savingRecrop"
             class="btn btn-primary"
           >
             {{ savingRecrop ? 'Saving...' : 'Save Crop' }}
@@ -1445,7 +1454,7 @@ const getFrameDimensions = (frame) => {
           </button>
           <button
             @click="saveWallRecrop"
-            :disabled="!wallCroppedImage || savingWallImage"
+            :disabled="!wallCroppedImage?.blob || savingWallImage"
             class="btn btn-primary"
           >
             {{ savingWallImage ? 'Saving...' : 'Save Crop' }}
