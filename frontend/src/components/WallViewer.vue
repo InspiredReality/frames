@@ -361,8 +361,16 @@ const updateFrames = () => {
   })
   frameObjects.clear()
 
-  // Add frames based on placements
-  props.framePlacements.forEach((placement, index) => {
+  // Sort placements largest-area-first so smaller frames get a higher z (closer to camera)
+  const sortedPlacements = props.framePlacements
+    .map((placement, index) => {
+      const frame = props.frames.find(f => f.id === placement.frame_id)
+      const dims = frame?.dimensions?.cm || { width: 20, height: 25 }
+      return { placement, originalIndex: index, area: dims.width * dims.height }
+    })
+    .sort((a, b) => b.area - a.area)
+
+  sortedPlacements.forEach(({ placement, originalIndex }, sortedIndex) => {
     const frame = props.frames.find(f => f.id === placement.frame_id)
     if (!frame) return
 
@@ -375,7 +383,7 @@ const updateFrames = () => {
 
     // Create a group to hold frame parts
     const frameGroup = new THREE.Group()
-    frameGroup.userData = { frameId: frame.id, placementIndex: index }
+    frameGroup.userData = { frameId: frame.id, placementIndex: originalIndex }
 
     // Frame color
     const frameColor = new THREE.Color(frame.styling?.frame_color || '#8B4513')
@@ -439,8 +447,11 @@ const updateFrames = () => {
     backPanel.position.z = -frameDepth / 2
     frameGroup.add(backPanel)
 
-    // Position the frame group: back of frame sits 1 cm (0.01 units) in front of wall (z=-0.1)
-    const frameZ = -0.1 + 0.01 + frameDepth / 2
+    // Smaller frames (higher sortedIndex) sit slightly in front of larger frames.
+    // 0.002 scene units (2 mm) per layer — invisible at normal viewing distance but
+    // guarantees correct depth ordering regardless of overlap.
+    const zLayerOffset = sortedIndex * 0.002
+    const frameZ = -0.1 + 0.01 + frameDepth / 2 + zLayerOffset
     frameGroup.position.set(
       placement.position?.x || 0,
       placement.position?.y || 0,
@@ -448,7 +459,7 @@ const updateFrames = () => {
     )
 
     scene.add(frameGroup)
-    frameObjects.set(index, frameGroup)
+    frameObjects.set(originalIndex, frameGroup)
   })
 }
 
