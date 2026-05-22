@@ -7,6 +7,7 @@ import ImageCropper from '@/components/ImageCropper.vue'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
 import { getUploadUrl } from '@/services/api'
+import api from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +17,7 @@ const picturesStore = usePicturesStore()
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
+const saveError = ref('')
 const showFramePicker = ref(false)
 
 // Frame editing state
@@ -201,6 +203,7 @@ const savePosition = async () => {
   if (selectedPlacementIndex.value === null) return
 
   savingPosition.value = true
+  saveError.value = ''
   try {
     const placements = [...(wall.value.frame_placements || [])]
     placements[selectedPlacementIndex.value] = {
@@ -217,7 +220,7 @@ const savePosition = async () => {
     closeFrameEditor()
   } catch (err) {
     console.error('Failed to update position:', err)
-    error.value = 'Failed to update position'
+    saveError.value = 'Failed to update position. Please try again.'
   } finally {
     savingPosition.value = false
   }
@@ -588,20 +591,15 @@ const saveRecrop = async () => {
   if (!croppedImage.value || !selectedPicture.value) return
 
   savingRecrop.value = true
+  saveError.value = ''
   try {
     const file = new File([croppedImage.value.blob], 'recropped.jpg', { type: 'image/jpeg' })
     const formData = new FormData()
     formData.append('image', file)
 
-    const response = await fetch(`/api/pictures/${selectedPicture.value.id}/image`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData
+    await api.put(`/pictures/${selectedPicture.value.id}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     })
-
-    if (!response.ok) throw new Error('Failed to update image')
 
     // Update frame dimensions to match new crop aspect ratio
     if (selectedFrame.value && croppedImage.value.width && croppedImage.value.height) {
@@ -630,7 +628,7 @@ const saveRecrop = async () => {
     croppedImage.value = null
   } catch (err) {
     console.error('Failed to save recropped image:', err)
-    error.value = 'Failed to save recropped image'
+    saveError.value = 'Failed to save recropped image. Please try again.'
   } finally {
     savingRecrop.value = false
   }
@@ -642,6 +640,7 @@ const closeFrameEditor = () => {
   editingFrameDimensions.value = false
   editingFrameColor.value = false
   showRecropModal.value = false
+  saveError.value = ''
 }
 
 // Get frame dimensions for preview
@@ -1311,6 +1310,7 @@ const getFrameDimensions = (frame) => {
                 >
                   {{ savingPosition ? 'Saving...' : 'Save Position' }}
                 </button>
+                <p v-if="saveError" class="text-red-400 text-xs mt-2">{{ saveError }}</p>
               </div>
             </div>
 
@@ -1400,6 +1400,7 @@ const getFrameDimensions = (frame) => {
             {{ savingRecrop ? 'Saving...' : 'Save Crop' }}
           </button>
         </div>
+        <p v-if="saveError" class="text-red-400 text-xs mt-3 text-center">{{ saveError }}</p>
       </div>
     </div>
 
