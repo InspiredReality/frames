@@ -1317,7 +1317,7 @@ const getFrameDimensions = (frame) => {
             <!-- Right column: Y vertical slider only -->
             <div class="flex flex-col items-center" style="width: 60px;">
               <span class="text-xs text-gray-500 mb-1">Y</span>
-              <div class="flex items-center" style="height: 180px;">
+              <div class="flex items-center overflow-hidden" style="height: 180px; width: 60px;">
                 <input
                   type="range"
                   v-model.number="posFromFloorCm"
@@ -1325,7 +1325,7 @@ const getFrameDimensions = (frame) => {
                   :max="wall?.height_cm || 300"
                   step="0.5"
                   class="vertical-slider"
-                  style="width: 180px; transform: rotate(-90deg); transform-origin: center center;"
+                  style="width: 180px; transform: rotate(-90deg); transform-origin: center center; margin-left: -60px;"
                   @input="positionUnit === 'ft' && syncFtInFromCm()"
                 />
               </div>
