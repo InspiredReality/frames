@@ -1208,9 +1208,9 @@ const getFrameDimensions = (frame) => {
           </div>
 
           <div class="flex gap-4">
-            <!-- Left column: X slider + buttons -->
+            <!-- Left column: X slider + X input + Y input + buttons -->
             <div class="flex-1">
-              <!-- X Position (horizontal slider) -->
+              <!-- X Position -->
               <div class="mb-3">
                 <label class="block text-sm text-gray-400 mb-1">X Position <span class="text-gray-500">({{ xLabel }})</span></label>
                 <input
@@ -1222,7 +1222,6 @@ const getFrameDimensions = (frame) => {
                   class="w-full"
                   @input="positionUnit === 'ft' && syncFtInFromCm()"
                 />
-                <!-- cm input -->
                 <div v-if="positionUnit === 'cm'" class="mt-1">
                   <div class="flex items-center gap-1">
                     <input
@@ -1235,7 +1234,6 @@ const getFrameDimensions = (frame) => {
                     <span class="text-xs text-gray-400 whitespace-nowrap">cm {{ xLabel }}</span>
                   </div>
                 </div>
-                <!-- ft & in input -->
                 <div v-else class="mt-1 flex items-center gap-1">
                   <input
                     type="number"
@@ -1258,8 +1256,47 @@ const getFrameDimensions = (frame) => {
                 </div>
               </div>
 
-              <!-- Buttons stacked -->
-              <div class="space-y-2 mt-3">
+              <!-- Y Position input (below X) -->
+              <div class="mb-3">
+                <label class="block text-sm text-gray-400 mb-1">Y Position <span class="text-gray-500">({{ yLabel }})</span></label>
+                <template v-if="positionUnit === 'cm'">
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      v-model.number="yDisplayCm"
+                      step="0.1"
+                      min="0"
+                      class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400 whitespace-nowrap">cm {{ yLabel }}</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      v-model.number="posYFt"
+                      min="0"
+                      @input="applyFtInToPosition('y')"
+                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400">ft</span>
+                    <input
+                      type="number"
+                      v-model.number="posYIn"
+                      step="0.1"
+                      min="0"
+                      max="11.9"
+                      @input="applyFtInToPosition('y')"
+                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400 whitespace-nowrap">in {{ yLabel }}</span>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Buttons -->
+              <div class="space-y-2">
                 <button
                   @click="resetPosition"
                   :disabled="editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y"
@@ -1277,62 +1314,20 @@ const getFrameDimensions = (frame) => {
               </div>
             </div>
 
-            <!-- Right column: Y slider (vertical) + input -->
-            <div class="flex flex-col items-center" style="width: 120px;">
-              <label class="block text-sm text-gray-400 mb-1">Y Position <span class="text-gray-500">({{ yLabel }})</span></label>
-              <div class="flex items-stretch gap-2 flex-1">
-                <!-- Vertical slider -->
-                <div class="flex items-center" style="height: 180px;">
-                  <input
-                    type="range"
-                    v-model.number="posFromFloorCm"
-                    :min="0"
-                    :max="wall?.height_cm || 300"
-                    step="0.5"
-                    class="vertical-slider"
-                    style="width: 180px; transform: rotate(-90deg); transform-origin: center center;"
-                    @input="positionUnit === 'ft' && syncFtInFromCm()"
-                  />
-                </div>
-                <!-- Input beside slider -->
-                <div class="flex flex-col justify-center">
-                  <template v-if="positionUnit === 'cm'">
-                    <input
-                      type="number"
-                      v-model.number="yDisplayCm"
-                      step="0.1"
-                      min="0"
-                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-                    />
-                    <span class="text-xs text-gray-400 text-center mt-1">cm</span>
-                  </template>
-                  <template v-else>
-                    <div class="space-y-1">
-                      <div class="flex items-center gap-1">
-                        <input
-                          type="number"
-                          v-model.number="posYFt"
-                          min="0"
-                          @input="applyFtInToPosition('y')"
-                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-                        />
-                        <span class="text-xs text-gray-400">ft</span>
-                      </div>
-                      <div class="flex items-center gap-1">
-                        <input
-                          type="number"
-                          v-model.number="posYIn"
-                          step="0.1"
-                          min="0"
-                          max="11.9"
-                          @input="applyFtInToPosition('y')"
-                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-                        />
-                        <span class="text-xs text-gray-400">in</span>
-                      </div>
-                    </div>
-                  </template>
-                </div>
+            <!-- Right column: Y vertical slider only -->
+            <div class="flex flex-col items-center" style="width: 60px;">
+              <span class="text-xs text-gray-500 mb-1">Y</span>
+              <div class="flex items-center" style="height: 180px;">
+                <input
+                  type="range"
+                  v-model.number="posFromFloorCm"
+                  :min="0"
+                  :max="wall?.height_cm || 300"
+                  step="0.5"
+                  class="vertical-slider"
+                  style="width: 180px; transform: rotate(-90deg); transform-origin: center center;"
+                  @input="positionUnit === 'ft' && syncFtInFromCm()"
+                />
               </div>
             </div>
           </div>
