@@ -197,7 +197,7 @@ const savePicture = async () => {
       <h2 class="text-2xl font-bold mb-6 text-center">Crop & Set Dimensions</h2>
 
       <div class="grid md:grid-cols-2 gap-6">
-        <!-- Left Column: Dimensions + Wall Selection -->
+        <!-- Left Column: Dimensions -->
         <div class="space-y-4">
           <!-- Dimensions Input -->
           <div class="card">
@@ -209,42 +209,6 @@ const savePicture = async () => {
               Enter the real-world size of your picture frame
             </p>
             <DimensionInput v-model="dimensions" />
-          </div>
-
-          <!-- Wall Selection (Optional) -->
-          <div class="card" v-if="wallsStore.walls.length > 0">
-            <h3 class="font-semibold mb-3 flex items-center gap-2">
-              <span class="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center text-xs">+</span>
-              Assign to Wall (Optional)
-            </h3>
-            <p class="text-sm text-gray-400 mb-3">
-              Select a wall to place this picture on
-            </p>
-            <div class="grid grid-cols-3 gap-2">
-              <button
-                @click="selectedWallId = null"
-                class="aspect-video rounded-lg border-2 transition flex items-center justify-center text-sm"
-                :class="selectedWallId === null ? 'border-primary-500 bg-primary-500/10' : 'border-gray-600 hover:border-gray-500'"
-              >
-                None
-              </button>
-              <button
-                v-for="wall in wallsStore.walls"
-                :key="wall.id"
-                @click="selectedWallId = wall.id"
-                class="aspect-video rounded-lg border-2 overflow-hidden transition relative"
-                :class="selectedWallId === wall.id ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
-              >
-                <img
-                  :src="getWallImageUrl(wall.thumbnail_path || wall.image_path)"
-                  :alt="wall.name"
-                  class="w-full h-full object-cover"
-                />
-                <div class="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
-                  <span class="text-xs truncate block">{{ wall.name }}</span>
-                </div>
-              </button>
-            </div>
           </div>
         </div>
 
@@ -412,6 +376,36 @@ const savePicture = async () => {
           <p v-if="selectedWall" class="text-gray-400 text-sm">
             Wall: {{ selectedWall.name }}
           </p>
+        </div>
+
+        <!-- Assign to Wall (Optional) -->
+        <div v-if="wallsStore.walls.length > 0" class="mb-6">
+          <label class="block text-sm text-gray-400 mb-2">Assign to Wall (Optional)</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              @click="selectedWallId = null"
+              class="aspect-video rounded-lg border-2 transition flex items-center justify-center text-sm"
+              :class="selectedWallId === null ? 'border-primary-500 bg-primary-500/10' : 'border-gray-600 hover:border-gray-500'"
+            >
+              None
+            </button>
+            <button
+              v-for="wall in wallsStore.walls"
+              :key="wall.id"
+              @click="selectedWallId = wall.id"
+              class="aspect-video rounded-lg border-2 overflow-hidden transition relative"
+              :class="selectedWallId === wall.id ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <img
+                :src="getWallImageUrl(wall.thumbnail_path || wall.image_path)"
+                :alt="wall.name"
+                class="w-full h-full object-cover"
+              />
+              <div class="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                <span class="text-xs truncate block">{{ wall.name }}</span>
+              </div>
+            </button>
+          </div>
         </div>
 
         <div class="flex gap-4">

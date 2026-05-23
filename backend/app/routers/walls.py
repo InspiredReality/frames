@@ -161,6 +161,7 @@ async def create_wall(
         name=name,
         description=description,
         image_path=image_path_val,
+        original_image_path=image_path_val,
         thumbnail_path=thumbnail_path_val,
         background_color=background_color,
         width_cm=width_cm,

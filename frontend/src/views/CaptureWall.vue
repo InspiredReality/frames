@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
@@ -20,6 +20,7 @@ const wallWidthCm = ref(0)
 const wallHeightCm = ref(0)
 const loading = ref(false)
 const error = ref('')
+const lockAspectRatio = ref(false)
 
 // Blank color wall state
 const useBlankColor = ref(false)
@@ -106,6 +107,16 @@ const displayHeightCm = computed({
 // Toggle functions - just change display unit, no conversion needed
 const selectFtIn = () => { wallUnit.value = 'ft' }
 const selectCm = () => { wallUnit.value = 'cm' }
+
+// Aspect ratio of the original captured photo (used for optional lock)
+const capturedAspectRatio = computed(() => {
+  if (!capturedImage.value?.width || !capturedImage.value?.height) return null
+  return capturedImage.value.width / capturedImage.value.height
+})
+const cropAspectRatio = computed(() => lockAspectRatio.value ? capturedAspectRatio.value : null)
+
+// Reset lock when going back to capture
+watch(step, (s) => { if (s === 1) lockAspectRatio.value = false })
 
 // Get values in cm for saving (source of truth)
 const getWidthInCm = () => wallWidthCm.value || null
@@ -256,8 +267,21 @@ const saveWall = async () => {
       <div v-if="!useBlankColor && capturedImage" class="card mb-4">
         <ImageCropper
           :imageUrl="capturedImage.dataUrl"
+          :aspectRatio="cropAspectRatio"
           @crop="onCrop"
         />
+        <div class="flex items-center gap-2 mt-3 p-3 bg-dark-300 rounded-lg">
+          <input
+            type="checkbox"
+            id="lockRatio"
+            v-model="lockAspectRatio"
+            class="w-4 h-4 rounded border-gray-600 bg-dark-100 text-primary-500 focus:ring-primary-500 cursor-pointer"
+          />
+          <label for="lockRatio" class="text-sm text-gray-300 cursor-pointer select-none">
+            Lock aspect ratio
+            <span v-if="capturedAspectRatio" class="text-gray-500">({{ capturedAspectRatio.toFixed(2) }})</span>
+          </label>
+        </div>
       </div>
 
       <!-- Color selection (for blank color walls) -->

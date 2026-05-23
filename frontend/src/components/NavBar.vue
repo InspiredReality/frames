@@ -18,7 +18,7 @@ const logout = () => {
 </script>
 
 <template>
-  <nav class="bg-dark-200 border-b border-gray-700">
+  <nav class="bg-dark-200 border-b border-gray-700 sticky top-0 z-50">
     <div class="container mx-auto px-4">
       <div class="flex items-center justify-between h-16">
         <!-- Logo -->

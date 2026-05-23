@@ -7,6 +7,7 @@ import ImageCropper from '@/components/ImageCropper.vue'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
 import { getUploadUrl } from '@/services/api'
+import api from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +17,7 @@ const picturesStore = usePicturesStore()
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
+const saveError = ref('')
 const showFramePicker = ref(false)
 
 // Frame editing state
@@ -201,6 +203,7 @@ const savePosition = async () => {
   if (selectedPlacementIndex.value === null) return
 
   savingPosition.value = true
+  saveError.value = ''
   try {
     const placements = [...(wall.value.frame_placements || [])]
     placements[selectedPlacementIndex.value] = {
@@ -217,7 +220,7 @@ const savePosition = async () => {
     closeFrameEditor()
   } catch (err) {
     console.error('Failed to update position:', err)
-    error.value = 'Failed to update position'
+    saveError.value = 'Failed to update position. Please try again.'
   } finally {
     savingPosition.value = false
   }
@@ -227,11 +230,14 @@ const resetPosition = () => {
   editingPosition.value = { ...savedPosition.value }
 }
 
+// Default wall size when dimensions are not explicitly set: 8 ft × 8 ft
+const WALL_DEFAULT_CM = 8 * 30.48 // 243.84 cm
+
 // Position display: convert internal meters (center-based) to wall-relative measurements
-const wallWidthM = computed(() => (wall.value?.width_cm || 0) * 0.01)
-const wallHeightM = computed(() => (wall.value?.height_cm || 0) * 0.01)
-const wallWidthCmVal = computed(() => wall.value?.width_cm || 0)
-const wallHeightCmVal = computed(() => wall.value?.height_cm || 0)
+const wallWidthM = computed(() => ((wall.value?.width_cm || WALL_DEFAULT_CM) * 0.01))
+const wallHeightM = computed(() => ((wall.value?.height_cm || WALL_DEFAULT_CM) * 0.01))
+const wallWidthCmVal = computed(() => wall.value?.width_cm || WALL_DEFAULT_CM)
+const wallHeightCmVal = computed(() => wall.value?.height_cm || WALL_DEFAULT_CM)
 
 // "From left" = wallWidth/2 + x (in meters), converted to cm
 const posFromLeftCm = computed({
@@ -450,7 +456,9 @@ const saveWall = async () => {
 
 // Wall image editing (recrop and upload)
 const startWallRecrop = () => {
-  wallRecropImageUrl.value = getImageUrl(wall.value.original_image_path || wall.value.image_path)
+  // Cache-bust so the browser fetches a fresh CORS-enabled copy (avoids opaque-cache canvas taint)
+  const base = getImageUrl(wall.value.original_image_path || wall.value.image_path)
+  wallRecropImageUrl.value = `${base}?t=${Date.now()}`
   wallCroppedImage.value = null
   showWallRecropModal.value = true
 }
@@ -462,12 +470,17 @@ const handleWallCrop = (cropData) => {
 const cancelWallRecrop = () => {
   showWallRecropModal.value = false
   wallCroppedImage.value = null
+  saveError.value = ''
 }
 
 const saveWallRecrop = async () => {
-  if (!wallCroppedImage.value) return
+  if (!wallCroppedImage.value?.blob) {
+    saveError.value = 'Unable to export cropped image. Try uploading a new photo instead.'
+    return
+  }
 
   savingWallImage.value = true
+  saveError.value = ''
   try {
     const file = new File([wallCroppedImage.value.blob], 'wall-recropped.jpg', { type: 'image/jpeg' })
     await wallsStore.updateWallImage(wall.value.id, file)
@@ -475,7 +488,7 @@ const saveWallRecrop = async () => {
     wallCroppedImage.value = null
   } catch (err) {
     console.error('Failed to save wall image:', err)
-    error.value = 'Failed to save wall image'
+    saveError.value = 'Failed to save wall image. Please try again.'
   } finally {
     savingWallImage.value = false
   }
@@ -556,7 +569,8 @@ const saveFrameDimensions = async () => {
 // Recrop functionality
 const startRecrop = () => {
   if (!selectedPicture.value) return
-  recropImageUrl.value = getImageUrl(selectedPicture.value.original_image_path || selectedPicture.value.image_path)
+  const base = getImageUrl(selectedPicture.value.original_image_path || selectedPicture.value.image_path)
+  recropImageUrl.value = `${base}?t=${Date.now()}`
   croppedImage.value = null
   lockAspectRatio.value = true
 
@@ -585,23 +599,21 @@ const cancelRecrop = () => {
 }
 
 const saveRecrop = async () => {
-  if (!croppedImage.value || !selectedPicture.value) return
+  if (!croppedImage.value?.blob || !selectedPicture.value) {
+    saveError.value = 'Unable to export cropped image. Try uploading a new photo instead.'
+    return
+  }
 
   savingRecrop.value = true
+  saveError.value = ''
   try {
     const file = new File([croppedImage.value.blob], 'recropped.jpg', { type: 'image/jpeg' })
     const formData = new FormData()
     formData.append('image', file)
 
-    const response = await fetch(`/api/pictures/${selectedPicture.value.id}/image`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData
+    await api.put(`/pictures/${selectedPicture.value.id}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     })
-
-    if (!response.ok) throw new Error('Failed to update image')
 
     // Update frame dimensions to match new crop aspect ratio
     if (selectedFrame.value && croppedImage.value.width && croppedImage.value.height) {
@@ -630,7 +642,7 @@ const saveRecrop = async () => {
     croppedImage.value = null
   } catch (err) {
     console.error('Failed to save recropped image:', err)
-    error.value = 'Failed to save recropped image'
+    saveError.value = 'Failed to save recropped image. Please try again.'
   } finally {
     savingRecrop.value = false
   }
@@ -642,6 +654,7 @@ const closeFrameEditor = () => {
   editingFrameDimensions.value = false
   editingFrameColor.value = false
   showRecropModal.value = false
+  saveError.value = ''
 }
 
 // Get frame dimensions for preview
@@ -731,7 +744,7 @@ const getFrameDimensions = (frame) => {
                   ({{ (wall.width_cm / 2.54).toFixed(1) }}" x {{ (wall.height_cm / 2.54).toFixed(1) }}")
                 </template>
                 <template v-else>
-                  No dimensions set
+                  8 ft × 8 ft (default)
                 </template>
               </p>
             </template>
@@ -1208,9 +1221,9 @@ const getFrameDimensions = (frame) => {
           </div>
 
           <div class="flex gap-4">
-            <!-- Left column: X slider + buttons -->
+            <!-- Left column: X slider + X input + Y input + buttons -->
             <div class="flex-1">
-              <!-- X Position (horizontal slider) -->
+              <!-- X Position -->
               <div class="mb-3">
                 <label class="block text-sm text-gray-400 mb-1">X Position <span class="text-gray-500">({{ xLabel }})</span></label>
                 <input
@@ -1222,7 +1235,6 @@ const getFrameDimensions = (frame) => {
                   class="w-full"
                   @input="positionUnit === 'ft' && syncFtInFromCm()"
                 />
-                <!-- cm input -->
                 <div v-if="positionUnit === 'cm'" class="mt-1">
                   <div class="flex items-center gap-1">
                     <input
@@ -1235,7 +1247,6 @@ const getFrameDimensions = (frame) => {
                     <span class="text-xs text-gray-400 whitespace-nowrap">cm {{ xLabel }}</span>
                   </div>
                 </div>
-                <!-- ft & in input -->
                 <div v-else class="mt-1 flex items-center gap-1">
                   <input
                     type="number"
@@ -1258,8 +1269,47 @@ const getFrameDimensions = (frame) => {
                 </div>
               </div>
 
-              <!-- Buttons stacked -->
-              <div class="space-y-2 mt-3">
+              <!-- Y Position input (below X) -->
+              <div class="mb-3">
+                <label class="block text-sm text-gray-400 mb-1">Y Position <span class="text-gray-500">({{ yLabel }})</span></label>
+                <template v-if="positionUnit === 'cm'">
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      v-model.number="yDisplayCm"
+                      step="0.1"
+                      min="0"
+                      class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400 whitespace-nowrap">cm {{ yLabel }}</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      v-model.number="posYFt"
+                      min="0"
+                      @input="applyFtInToPosition('y')"
+                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400">ft</span>
+                    <input
+                      type="number"
+                      v-model.number="posYIn"
+                      step="0.1"
+                      min="0"
+                      max="11.9"
+                      @input="applyFtInToPosition('y')"
+                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
+                    />
+                    <span class="text-xs text-gray-400 whitespace-nowrap">in {{ yLabel }}</span>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Buttons -->
+              <div class="space-y-2">
                 <button
                   @click="resetPosition"
                   :disabled="editingPosition.x === savedPosition.x && editingPosition.y === savedPosition.y"
@@ -1274,65 +1324,24 @@ const getFrameDimensions = (frame) => {
                 >
                   {{ savingPosition ? 'Saving...' : 'Save Position' }}
                 </button>
+                <p v-if="saveError" class="text-red-400 text-xs mt-2">{{ saveError }}</p>
               </div>
             </div>
 
-            <!-- Right column: Y slider (vertical) + input -->
-            <div class="flex flex-col items-center" style="width: 120px;">
-              <label class="block text-sm text-gray-400 mb-1">Y Position <span class="text-gray-500">({{ yLabel }})</span></label>
-              <div class="flex items-stretch gap-2 flex-1">
-                <!-- Vertical slider -->
-                <div class="flex items-center" style="height: 180px;">
-                  <input
-                    type="range"
-                    v-model.number="posFromFloorCm"
-                    :min="0"
-                    :max="wall?.height_cm || 300"
-                    step="0.5"
-                    class="vertical-slider"
-                    style="width: 180px; transform: rotate(-90deg); transform-origin: center center;"
-                    @input="positionUnit === 'ft' && syncFtInFromCm()"
-                  />
-                </div>
-                <!-- Input beside slider -->
-                <div class="flex flex-col justify-center">
-                  <template v-if="positionUnit === 'cm'">
-                    <input
-                      type="number"
-                      v-model.number="yDisplayCm"
-                      step="0.1"
-                      min="0"
-                      class="w-16 px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-                    />
-                    <span class="text-xs text-gray-400 text-center mt-1">cm</span>
-                  </template>
-                  <template v-else>
-                    <div class="space-y-1">
-                      <div class="flex items-center gap-1">
-                        <input
-                          type="number"
-                          v-model.number="posYFt"
-                          min="0"
-                          @input="applyFtInToPosition('y')"
-                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-                        />
-                        <span class="text-xs text-gray-400">ft</span>
-                      </div>
-                      <div class="flex items-center gap-1">
-                        <input
-                          type="number"
-                          v-model.number="posYIn"
-                          step="0.1"
-                          min="0"
-                          max="11.9"
-                          @input="applyFtInToPosition('y')"
-                          class="w-12 px-1 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
-                        />
-                        <span class="text-xs text-gray-400">in</span>
-                      </div>
-                    </div>
-                  </template>
-                </div>
+            <!-- Right column: Y vertical slider only -->
+            <div class="flex flex-col items-center" style="width: 60px;">
+              <span class="text-xs text-gray-500 mb-1">Y</span>
+              <div class="flex items-center overflow-hidden" style="height: 180px; width: 60px;">
+                <input
+                  type="range"
+                  v-model.number="posFromFloorCm"
+                  :min="0"
+                  :max="wall?.height_cm || 300"
+                  step="0.5"
+                  class="vertical-slider"
+                  style="width: 180px; transform: rotate(-90deg); transform-origin: center center; margin-left: -60px;"
+                  @input="positionUnit === 'ft' && syncFtInFromCm()"
+                />
               </div>
             </div>
           </div>
@@ -1399,12 +1408,13 @@ const getFrameDimensions = (frame) => {
           </button>
           <button
             @click="saveRecrop"
-            :disabled="!croppedImage || savingRecrop"
+            :disabled="!croppedImage?.blob || savingRecrop"
             class="btn btn-primary"
           >
             {{ savingRecrop ? 'Saving...' : 'Save Crop' }}
           </button>
         </div>
+        <p v-if="saveError" class="text-red-400 text-xs mt-3 text-center">{{ saveError }}</p>
       </div>
     </div>
 
@@ -1444,12 +1454,13 @@ const getFrameDimensions = (frame) => {
           </button>
           <button
             @click="saveWallRecrop"
-            :disabled="!wallCroppedImage || savingWallImage"
+            :disabled="!wallCroppedImage?.blob || savingWallImage"
             class="btn btn-primary"
           >
             {{ savingWallImage ? 'Saving...' : 'Save Crop' }}
           </button>
         </div>
+        <p v-if="saveError" class="text-red-400 text-xs mt-3 text-center">{{ saveError }}</p>
       </div>
     </div>
   </div>
