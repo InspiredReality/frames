@@ -36,10 +36,10 @@ const logout = () => {
               Capture Frame
             </router-link>
             <router-link to="/gallery" class="text-gray-300 hover:text-white transition">
-              Gallery
+              View Gallery
             </router-link>
             <router-link to="/realities" class="text-gray-300 hover:text-white transition">
-              Realities
+              Enter Realities
             </router-link>
             <button @click="logout" class="btn btn-secondary">
               Logout
@@ -74,10 +74,10 @@ const logout = () => {
             Capture Frame
           </router-link>
           <router-link to="/gallery" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
-            Gallery
+            View Gallery
           </router-link>
           <router-link to="/realities" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
-            Realities
+            Enter Realities
           </router-link>
           <button @click="logout" class="block w-full text-left py-2 text-gray-300 hover:text-white">
             Logout
