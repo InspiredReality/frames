@@ -54,6 +54,11 @@ def create_app() -> FastAPI:
             conn.commit()
         except Exception:
             conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE walls ADD COLUMN original_image_path VARCHAR(500)"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     # -------------------
     # CORS
