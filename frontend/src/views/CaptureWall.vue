@@ -1,8 +1,9 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
+import QrCodeCard from '@/components/QrCodeCard.vue'
 import { useWallsStore } from '@/store/walls'
 
 const router = useRouter()
@@ -13,11 +14,13 @@ const capturedImage = ref(null)
 const croppedImage = ref(null)
 const wallName = ref('')
 const wallDescription = ref('')
-const wallWidth = ref('')
-const wallHeight = ref('')
-const wallUnit = ref('feet') // 'feet', 'inches', or 'cm'
+const wallUnit = ref('ft') // 'ft' or 'cm'
+// Source of truth - always stored in cm
+const wallWidthCm = ref(0)
+const wallHeightCm = ref(0)
 const loading = ref(false)
 const error = ref('')
+const lockAspectRatio = ref(false)
 
 // Blank color wall state
 const useBlankColor = ref(false)
@@ -37,58 +40,87 @@ const wallColorPresets = [
 const INCHES_PER_FOOT = 12
 const CM_PER_INCH = 2.54
 
-const unitLabels = {
-  feet: 'ft',
-  inches: 'in',
-  cm: 'cm'
-}
-
-const unitPlaceholders = {
-  feet: { width: 'e.g., 10', height: 'e.g., 8' },
-  inches: { width: 'e.g., 120', height: 'e.g., 96' },
-  cm: { width: 'e.g., 300', height: 'e.g., 250' }
-}
-
-const toggleUnit = () => {
-  const units = ['feet', 'inches', 'cm']
-  const currentIndex = units.indexOf(wallUnit.value)
-  const newUnit = units[(currentIndex + 1) % units.length]
-
-  // Convert existing values
-  if (wallWidth.value) {
-    wallWidth.value = convertDimension(parseFloat(wallWidth.value), wallUnit.value, newUnit)
+// Computed display values for ft & in mode (derived from cm source of truth)
+const displayWidthFt = computed({
+  get: () => {
+    if (!wallWidthCm.value) return ''
+    const totalInches = wallWidthCm.value / CM_PER_INCH
+    return Math.floor(totalInches / INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(val) || 0
+    const inches = parseFloat(displayWidthIn.value) || 0
+    wallWidthCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
   }
-  if (wallHeight.value) {
-    wallHeight.value = convertDimension(parseFloat(wallHeight.value), wallUnit.value, newUnit)
+})
+
+const displayWidthIn = computed({
+  get: () => {
+    if (!wallWidthCm.value) return ''
+    const totalInches = wallWidthCm.value / CM_PER_INCH
+    return Math.round(totalInches % INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(displayWidthFt.value) || 0
+    const inches = parseFloat(val) || 0
+    wallWidthCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
   }
+})
 
-  wallUnit.value = newUnit
-}
+const displayHeightFt = computed({
+  get: () => {
+    if (!wallHeightCm.value) return ''
+    const totalInches = wallHeightCm.value / CM_PER_INCH
+    return Math.floor(totalInches / INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(val) || 0
+    const inches = parseFloat(displayHeightIn.value) || 0
+    wallHeightCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
+  }
+})
 
-const convertDimension = (value, fromUnit, toUnit) => {
-  if (!value) return ''
+const displayHeightIn = computed({
+  get: () => {
+    if (!wallHeightCm.value) return ''
+    const totalInches = wallHeightCm.value / CM_PER_INCH
+    return Math.round(totalInches % INCHES_PER_FOOT) || ''
+  },
+  set: (val) => {
+    const ft = parseFloat(displayHeightFt.value) || 0
+    const inches = parseFloat(val) || 0
+    wallHeightCm.value = (ft * INCHES_PER_FOOT + inches) * CM_PER_INCH
+  }
+})
 
-  // First convert to cm
-  let cm = value
-  if (fromUnit === 'feet') cm = value * INCHES_PER_FOOT * CM_PER_INCH
-  else if (fromUnit === 'inches') cm = value * CM_PER_INCH
+// Computed display values for cm mode
+const displayWidthCm = computed({
+  get: () => wallWidthCm.value ? Math.round(wallWidthCm.value) : '',
+  set: (val) => { wallWidthCm.value = parseFloat(val) || 0 }
+})
 
-  // Then convert from cm to target unit
-  let result = cm
-  if (toUnit === 'feet') result = cm / (INCHES_PER_FOOT * CM_PER_INCH)
-  else if (toUnit === 'inches') result = cm / CM_PER_INCH
+const displayHeightCm = computed({
+  get: () => wallHeightCm.value ? Math.round(wallHeightCm.value) : '',
+  set: (val) => { wallHeightCm.value = parseFloat(val) || 0 }
+})
 
-  return result.toFixed(toUnit === 'feet' ? 2 : toUnit === 'inches' ? 1 : 0)
-}
+// Toggle functions - just change display unit, no conversion needed
+const selectFtIn = () => { wallUnit.value = 'ft' }
+const selectCm = () => { wallUnit.value = 'cm' }
 
-const getDimensionInCm = (value) => {
-  if (!value) return null
-  const num = parseFloat(value)
-  if (wallUnit.value === 'cm') return num
-  if (wallUnit.value === 'inches') return num * CM_PER_INCH
-  if (wallUnit.value === 'feet') return num * INCHES_PER_FOOT * CM_PER_INCH
-  return num
-}
+// Aspect ratio of the original captured photo (used for optional lock)
+const capturedAspectRatio = computed(() => {
+  if (!capturedImage.value?.width || !capturedImage.value?.height) return null
+  return capturedImage.value.width / capturedImage.value.height
+})
+const cropAspectRatio = computed(() => lockAspectRatio.value ? capturedAspectRatio.value : null)
+
+// Reset lock when going back to capture
+watch(step, (s) => { if (s === 1) lockAspectRatio.value = false })
+
+// Get values in cm for saving (source of truth)
+const getWidthInCm = () => wallWidthCm.value || null
+const getHeightInCm = () => wallHeightCm.value || null
 
 const onCapture = (data) => {
   capturedImage.value = data
@@ -117,7 +149,7 @@ const selectBlankColor = () => {
   useBlankColor.value = true
   capturedImage.value = null
   croppedImage.value = null
-  step.value = 3
+  step.value = 2  // Go to step 2 for color + dimensions
 }
 
 const retake = () => {
@@ -148,8 +180,8 @@ const saveWall = async () => {
     }
 
     await wallsStore.uploadWall(file, wallName.value, wallDescription.value, {
-      width_cm: getDimensionInCm(wallWidth.value),
-      height_cm: getDimensionInCm(wallHeight.value)
+      width_cm: getWidthInCm(),
+      height_cm: getHeightInCm()
     }, bgColor)
 
     router.push('/gallery')
@@ -184,6 +216,13 @@ const saveWall = async () => {
       </div>
     </div>
 
+    <!-- Step labels -->
+    <div class="flex justify-center gap-8 mb-6 text-sm text-gray-400">
+      <span :class="step >= 1 ? 'text-primary-400' : ''">1. Take/Upload Photo</span>
+      <span :class="step >= 2 ? 'text-primary-400' : ''">2. Crop & Size</span>
+      <span :class="step >= 3 ? 'text-primary-400' : ''">3. Save to Gallery</span>
+    </div>
+
     <!-- Error message -->
     <div v-if="error" class="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400">
       {{ error }}
@@ -193,10 +232,14 @@ const saveWall = async () => {
     <div v-if="step === 1">
       <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Wall</h2>
       <p class="text-gray-400 text-center mb-6">
-        Take a photo of the wall or use a blank color background
+        Take or upload a photo of the wall or use a blank color background
       </p>
 
       <CameraCapture @capture="onCapture" @error="onCameraError" />
+
+      <div class="mt-6">
+        <QrCodeCard />
+      </div>
 
       <div class="mt-6 text-center">
         <div class="flex items-center gap-4 mb-4">
@@ -213,30 +256,184 @@ const saveWall = async () => {
       </div>
     </div>
 
-    <!-- Step 2: Crop -->
+    <!-- Step 2: Crop & Size (or Color & Size for blank walls) -->
     <div v-if="step === 2" class="max-w-2xl mx-auto">
-      <h2 class="text-2xl font-bold mb-4 text-center">Crop Your Wall Photo</h2>
+      <h2 class="text-2xl font-bold mb-4 text-center">{{ useBlankColor ? 'Color & Size' : 'Crop & Size' }}</h2>
       <p class="text-gray-400 text-center mb-6">
-        Drag the corners or edges to select the wall area
+        {{ useBlankColor ? 'Choose wall color and enter dimensions' : 'Crop your wall photo and enter dimensions' }}
       </p>
 
-      <div class="card mb-4">
+      <!-- Photo cropping (for captured images) -->
+      <div v-if="!useBlankColor && capturedImage" class="card mb-4">
         <ImageCropper
           :imageUrl="capturedImage.dataUrl"
+          :aspectRatio="cropAspectRatio"
           @crop="onCrop"
         />
+        <div class="flex items-center gap-2 mt-3 p-3 bg-dark-300 rounded-lg">
+          <input
+            type="checkbox"
+            id="lockRatio"
+            v-model="lockAspectRatio"
+            class="w-4 h-4 rounded border-gray-600 bg-dark-100 text-primary-500 focus:ring-primary-500 cursor-pointer"
+          />
+          <label for="lockRatio" class="text-sm text-gray-300 cursor-pointer select-none">
+            Lock aspect ratio
+            <span v-if="capturedAspectRatio" class="text-gray-500">({{ capturedAspectRatio.toFixed(2) }})</span>
+          </label>
+        </div>
       </div>
 
-      <!-- Cropped Preview -->
-      <div v-if="croppedImage?.dataUrl" class="card mb-4">
-        <h3 class="font-semibold mb-2">Cropped Result</h3>
-        <div class="bg-dark-300 rounded-lg overflow-hidden flex items-center justify-center" style="max-height: 200px;">
-          <img
-            :src="croppedImage.dataUrl"
-            alt="Cropped preview"
-            class="max-w-full max-h-full object-contain"
+      <!-- Color selection (for blank color walls) -->
+      <div v-if="useBlankColor" class="card mb-4">
+        <h3 class="font-semibold mb-3">Wall Color</h3>
+        <div
+          class="w-full h-32 rounded-lg border border-gray-600 mb-3"
+          :style="{ backgroundColor: wallColor }"
+        ></div>
+        <div class="flex gap-2 flex-wrap">
+          <button
+            v-for="preset in wallColorPresets"
+            :key="preset.value"
+            @click="wallColor = preset.value; showCustomWallColor = false"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+            :class="wallColor === preset.value && !showCustomWallColor ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+          >
+            <span
+              class="w-5 h-5 rounded-full border border-gray-500"
+              :style="{ backgroundColor: preset.value }"
+            ></span>
+            <span class="text-sm">{{ preset.label }}</span>
+          </button>
+          <button
+            @click="showCustomWallColor = !showCustomWallColor"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
+            :class="showCustomWallColor ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+          >
+            <span
+              class="w-5 h-5 rounded-full border border-gray-500"
+              :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
+            ></span>
+            <span class="text-sm">Custom</span>
+          </button>
+        </div>
+        <div v-if="showCustomWallColor" class="mt-2">
+          <input
+            type="color"
+            v-model="wallColor"
+            class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
           />
         </div>
+      </div>
+
+      <!-- Wall Dimensions -->
+      <div class="card mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Wall Dimensions (optional)</h3>
+          <div class="flex gap-2">
+            <button
+              @click="selectFtIn"
+              class="px-3 py-1 text-sm rounded-full transition"
+              :class="wallUnit === 'ft' ? 'bg-primary-500 text-white' : 'bg-dark-300 hover:bg-dark-100'"
+            >
+              ft & in
+            </button>
+            <button
+              @click="selectCm"
+              class="px-3 py-1 text-sm rounded-full transition"
+              :class="wallUnit === 'cm' ? 'bg-primary-500 text-white' : 'bg-dark-300 hover:bg-dark-100'"
+            >
+              cm
+            </button>
+          </div>
+        </div>
+
+        <!-- ft & in inputs -->
+        <div v-if="wallUnit === 'ft'" class="space-y-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Width</label>
+            <div class="flex gap-2">
+              <div class="flex-1">
+                <input
+                  v-model="displayWidthFt"
+                  type="number"
+                  min="0"
+                  placeholder="ft"
+                  class="w-full"
+                />
+              </div>
+              <div class="flex-1">
+                <input
+                  v-model="displayWidthIn"
+                  type="number"
+                  min="0"
+                  max="11"
+                  placeholder="in"
+                  class="w-full"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Height</label>
+            <div class="flex gap-2">
+              <div class="flex-1">
+                <input
+                  v-model="displayHeightFt"
+                  type="number"
+                  min="0"
+                  placeholder="ft"
+                  class="w-full"
+                />
+              </div>
+              <div class="flex-1">
+                <input
+                  v-model="displayHeightIn"
+                  type="number"
+                  min="0"
+                  max="11"
+                  placeholder="in"
+                  class="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- cm inputs -->
+        <div v-else class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Width (cm)</label>
+            <input
+              v-model="displayWidthCm"
+              type="number"
+              min="0"
+              placeholder="e.g., 300"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Height (cm)</label>
+            <input
+              v-model="displayHeightCm"
+              type="number"
+              min="0"
+              placeholder="e.g., 250"
+            />
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">
+          Providing wall dimensions helps with accurate frame placement
+        </p>
+      </div>
+
+      <!-- Cropped Result Preview -->
+      <div v-if="!useBlankColor && croppedImage?.dataUrl" class="card mb-4">
+        <h3 class="font-semibold mb-2">Cropped Result</h3>
+        <img
+          :src="croppedImage.dataUrl"
+          alt="Cropped preview"
+          class="w-full rounded-lg"
+        />
         <div class="mt-2 text-xs text-gray-500 text-center">
           {{ croppedImage.width }} x {{ croppedImage.height }} pixels
         </div>
@@ -244,7 +441,7 @@ const saveWall = async () => {
 
       <div class="flex gap-4">
         <button @click="retake" class="btn btn-secondary flex-1">
-          Retake Photo
+          {{ useBlankColor ? 'Go Back' : 'Retake Photo' }}
         </button>
         <button @click="confirmCrop" class="btn btn-primary flex-1">
           Continue
@@ -252,9 +449,12 @@ const saveWall = async () => {
       </div>
     </div>
 
-    <!-- Step 3: Wall Details -->
+    <!-- Step 3: Save to Gallery -->
     <div v-if="step === 3" class="card">
-      <h2 class="text-2xl font-bold mb-4">Wall Details</h2>
+      <h2 class="text-2xl font-bold mb-4 text-center">Save to Gallery</h2>
+      <p class="text-gray-400 text-center mb-6">
+        Give your wall a name and save it
+      </p>
 
       <!-- Preview of cropped image -->
       <div v-if="!useBlankColor && croppedImage" class="mb-6">
@@ -271,44 +471,6 @@ const saveWall = async () => {
           class="w-full h-40 rounded-lg border border-gray-600"
           :style="{ backgroundColor: wallColor }"
         ></div>
-
-        <!-- Color selection -->
-        <div class="mt-3">
-          <label class="block text-sm text-gray-400 mb-2">Wall Color</label>
-          <div class="flex gap-2 flex-wrap">
-            <button
-              v-for="preset in wallColorPresets"
-              :key="preset.value"
-              @click="wallColor = preset.value; showCustomWallColor = false"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
-              :class="wallColor === preset.value && !showCustomWallColor ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
-            >
-              <span
-                class="w-5 h-5 rounded-full border border-gray-500"
-                :style="{ backgroundColor: preset.value }"
-              ></span>
-              <span class="text-sm">{{ preset.label }}</span>
-            </button>
-            <button
-              @click="showCustomWallColor = !showCustomWallColor"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
-              :class="showCustomWallColor ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
-            >
-              <span
-                class="w-5 h-5 rounded-full border border-gray-500"
-                :style="{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }"
-              ></span>
-              <span class="text-sm">Custom</span>
-            </button>
-          </div>
-          <div v-if="showCustomWallColor" class="mt-2">
-            <input
-              type="color"
-              v-model="wallColor"
-              class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
-            />
-          </div>
-        </div>
       </div>
 
       <div class="space-y-4">
@@ -327,54 +489,14 @@ const saveWall = async () => {
             v-model="wallDescription"
             rows="2"
             placeholder="Any notes about this wall..."
-            class="w-full px-4 py-2 bg-dark-300 border border-gray-600 rounded-lg text-white"
+            class="w-full px-4 py-2 bg-dark-300 border border-gray-600 rounded-lg text-white resize-none"
           ></textarea>
         </div>
-
-        <!-- Wall Dimensions with Unit Toggle -->
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm text-gray-400">Wall Dimensions (optional)</span>
-            <button
-              @click="toggleUnit"
-              class="px-3 py-1 text-sm bg-dark-300 rounded-full hover:bg-dark-100 transition"
-            >
-              Switch to {{ wallUnit === 'feet' ? 'inches' : wallUnit === 'inches' ? 'cm' : 'feet' }}
-            </button>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Width ({{ unitLabels[wallUnit] }})</label>
-              <input
-                v-model="wallWidth"
-                type="number"
-                :step="wallUnit === 'feet' ? '0.5' : '1'"
-                min="0"
-                :placeholder="unitPlaceholders[wallUnit].width"
-              />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Height ({{ unitLabels[wallUnit] }})</label>
-              <input
-                v-model="wallHeight"
-                type="number"
-                :step="wallUnit === 'feet' ? '0.5' : '1'"
-                min="0"
-                :placeholder="unitPlaceholders[wallUnit].height"
-              />
-            </div>
-          </div>
-        </div>
-
-        <p class="text-xs text-gray-500">
-          Providing wall dimensions helps with accurate frame placement
-        </p>
       </div>
 
       <div class="flex gap-4 mt-6">
-        <button @click="useBlankColor ? retake() : (step = 2)" class="btn btn-secondary flex-1">
-          {{ useBlankColor ? 'Go Back' : 'Edit Crop' }}
+        <button @click="step = 2" class="btn btn-secondary flex-1">
+          {{ useBlankColor ? 'Edit Color & Size' : 'Edit Crop & Size' }}
         </button>
         <button
           @click="saveWall"

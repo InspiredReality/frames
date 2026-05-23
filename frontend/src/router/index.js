@@ -38,12 +38,6 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/walls',
-    name: 'saved-walls',
-    component: () => import('@/views/SavedWalls.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/wall/:id',
     name: 'wall-editor',
     component: () => import('@/views/WallEditor.vue'),
@@ -53,6 +47,18 @@ const routes = [
     path: '/ar/:wallId?',
     name: 'ar-view',
     component: () => import('@/views/ARView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/realities',
+    name: 'realities',
+    component: () => import('@/views/Realities.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/reality/:id',
+    name: 'org-levels',
+    component: () => import('@/views/OrgLevels.vue'),
     meta: { requiresAuth: true }
   }
 ]

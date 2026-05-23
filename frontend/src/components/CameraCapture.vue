@@ -5,6 +5,7 @@ const emit = defineEmits(['capture', 'error'])
 
 const videoRef = ref(null)
 const canvasRef = ref(null)
+const fileInputRef = ref(null)
 const stream = ref(null)
 const isReady = ref(false)
 const facingMode = ref('environment') // 'user' or 'environment'
@@ -62,6 +63,44 @@ const capturePhoto = () => {
   }, 'image/jpeg', 0.9)
 }
 
+const triggerUpload = () => {
+  fileInputRef.value?.click()
+}
+
+const handleFileUpload = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const img = new Image()
+    img.onload = () => {
+      // Create a canvas to get the blob
+      const canvas = canvasRef.value
+      const ctx = canvas.getContext('2d')
+      canvas.width = img.width
+      canvas.height = img.height
+      ctx.drawImage(img, 0, 0)
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          emit('capture', {
+            blob,
+            dataUrl: e.target.result,
+            width: img.width,
+            height: img.height
+          })
+        }
+      }, 'image/jpeg', 0.9)
+    }
+    img.src = e.target.result
+  }
+  reader.readAsDataURL(file)
+
+  // Reset input so the same file can be selected again
+  event.target.value = ''
+}
+
 onMounted(() => {
   startCamera()
 })
@@ -72,7 +111,7 @@ onUnmounted(() => {
   }
 })
 
-defineExpose({ capturePhoto, switchCamera })
+defineExpose({ capturePhoto, switchCamera, triggerUpload })
 </script>
 
 <template>
@@ -86,12 +125,22 @@ defineExpose({ capturePhoto, switchCamera })
     />
     <canvas ref="canvasRef" class="hidden" />
 
+    <!-- Hidden file input -->
+    <input
+      ref="fileInputRef"
+      type="file"
+      accept="image/*"
+      class="hidden"
+      @change="handleFileUpload"
+    />
+
     <!-- Camera controls overlay -->
     <div class="absolute bottom-4 left-0 right-0 flex justify-center items-center space-x-4">
       <!-- Switch camera button -->
       <button
         @click="switchCamera"
         class="p-3 bg-dark-200/80 rounded-full text-white hover:bg-dark-300"
+        title="Switch camera"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -103,12 +152,21 @@ defineExpose({ capturePhoto, switchCamera })
         @click="capturePhoto"
         :disabled="!isReady"
         class="w-16 h-16 bg-white rounded-full border-4 border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition-transform"
+        title="Take photo"
       >
         <span class="sr-only">Capture</span>
       </button>
 
-      <!-- Placeholder for symmetry -->
-      <div class="w-12 h-12"></div>
+      <!-- Upload button -->
+      <button
+        @click="triggerUpload"
+        class="p-3 bg-dark-200/80 rounded-full text-white hover:bg-dark-300"
+        title="Upload photo"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
     </div>
 
     <!-- Loading overlay -->

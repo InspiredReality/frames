@@ -182,6 +182,74 @@ def delete_wall(wall_id):
     return jsonify({'message': 'Wall deleted'}), 200
 
 
+@bp.route('/<int:wall_id>/image', methods=['PUT'])
+@jwt_required()
+def update_wall_image(wall_id):
+    """Update a wall's image."""
+    try:
+        user_id = int(get_jwt_identity())
+        wall = db.session.query(Wall).filter_by(id=wall_id, user_id=user_id).first()
+
+        if not wall:
+            return jsonify({'error': 'Wall not found'}), 404
+
+        if 'image' not in request.files or request.files['image'].filename == '':
+            return jsonify({'error': 'No image provided'}), 400
+
+        file = request.files['image']
+
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'File type not allowed'}), 400
+
+        upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'walls')
+        os.makedirs(upload_folder, exist_ok=True)
+
+        # Store old image path for deletion after successful update
+        old_image_path = wall.image_path
+        old_thumbnail_path = wall.thumbnail_path
+
+        # Save the new image
+        filename = secure_filename(file.filename)
+        # Ensure we have a valid extension
+        if '.' not in filename:
+            filename = filename + '.jpg'
+        unique_filename = f"{user_id}_{int(os.urandom(4).hex(), 16)}_{filename}"
+        file_path = os.path.join(upload_folder, unique_filename)
+        file.save(file_path)
+
+        # Process image and create thumbnail
+        thumbnail_path = process_wall_image(file_path, upload_folder)
+
+        # Update wall record
+        wall.image_path = f"walls/{unique_filename}"
+        wall.thumbnail_path = f"walls/{os.path.basename(thumbnail_path)}" if thumbnail_path else None
+
+        db.session.commit()
+
+        # Try to delete old files (ignore errors - files may be on different storage)
+        base_folder = current_app.config['UPLOAD_FOLDER']
+        if old_image_path:
+            try:
+                os.remove(os.path.join(base_folder, old_image_path))
+            except (OSError, Exception):
+                pass
+        if old_thumbnail_path:
+            try:
+                os.remove(os.path.join(base_folder, old_thumbnail_path))
+            except (OSError, Exception):
+                pass
+
+        return jsonify({
+            'message': 'Wall image updated',
+            'wall': wall.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating wall image: {str(e)}")
+        return jsonify({'error': f'Failed to update wall image: {str(e)}'}), 500
+
+
 @bp.route('/<int:wall_id>/placements', methods=['POST'])
 @jwt_required()
 def add_frame_placement(wall_id):

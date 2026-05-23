@@ -18,6 +18,7 @@ class Wall(Base):
 
     # Wall image (nullable for color-only walls)
     image_path = Column(String(500), nullable=True)
+    original_image_path = Column(String(500), nullable=True)  # pre-crop original
     thumbnail_path = Column(String(500))
     background_color = Column(String(7))  # Hex color e.g. '#FFFFFF'
 
@@ -45,6 +46,7 @@ class Wall(Base):
             'name': self.name,
             'description': self.description,
             'image_path': self.image_path,
+            'original_image_path': self.original_image_path,
             'thumbnail_path': self.thumbnail_path,
             'background_color': self.background_color,
             'width_cm': self.width_cm,
