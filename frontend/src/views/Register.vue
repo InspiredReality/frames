@@ -102,7 +102,7 @@ const handleSubmit = async () => {
       <p class="mt-6 text-center text-gray-400">
         Already have an account?
         <router-link to="/login" class="text-primary-500 hover:underline">
-          Sign in
+          Login
         </router-link>
       </p>
     </div>

@@ -4,6 +4,7 @@ import api from '@/services/api'
 
 export const useWallsStore = defineStore('walls', () => {
   const walls = ref([])
+  const publicWalls = ref([])
   const currentWall = ref(null)
   const loading = ref(false)
   const error = ref(null)
@@ -20,6 +21,17 @@ export const useWallsStore = defineStore('walls', () => {
       throw err
     } finally {
       loading.value = false
+    }
+  }
+
+  async function fetchPublicWalls() {
+    try {
+      const response = await api.get('/walls/public')
+      publicWalls.value = response.data.walls
+      return publicWalls.value
+    } catch (err) {
+      error.value = err.message
+      throw err
     }
   }
 
@@ -115,10 +127,12 @@ export const useWallsStore = defineStore('walls', () => {
 
   return {
     walls,
+    publicWalls,
     currentWall,
     loading,
     error,
     fetchWalls,
+    fetchPublicWalls,
     fetchWall,
     uploadWall,
     updateWall,

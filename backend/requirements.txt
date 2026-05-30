@@ -40,3 +40,6 @@ pytest-flask==1.3.0
 # Cyber
 python-multipart
 Pillow
+
+# Email
+resend

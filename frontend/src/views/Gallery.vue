@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePicturesStore } from '@/store/pictures'
 import { useWallsStore } from '@/store/walls'
+import { useAuthStore } from '@/store/auth'
 import { getUploadUrl } from '@/services/api'
 import FramePreview2D from '@/components/FramePreview2D.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
@@ -10,10 +11,12 @@ import ImageCropper from '@/components/ImageCropper.vue'
 const router = useRouter()
 const picturesStore = usePicturesStore()
 const wallsStore = useWallsStore()
+const authStore = useAuthStore()
 const loading = ref(true)
 const selectedFrame = ref(null)
 const selectedWall = ref(null)
 const activeTab = ref('all') // 'all', 'walls', 'frames'
+const visibilityFilter = ref('private') // 'private', 'public', 'all'
 const assigningWall = ref(false)
 
 // Dimension editing state
@@ -66,7 +69,9 @@ onMounted(async () => {
   try {
     await Promise.all([
       picturesStore.fetchPictures(),
-      wallsStore.fetchWalls()
+      picturesStore.fetchPublicPictures(),
+      wallsStore.fetchWalls(),
+      wallsStore.fetchPublicWalls()
     ])
   } finally {
     loading.value = false
@@ -77,19 +82,63 @@ onUnmounted(() => {
   document.body.style.overflow = ''
 })
 
+const visibleWalls = computed(() => {
+  if (visibilityFilter.value === 'private') {
+    return wallsStore.walls
+  }
+  if (visibilityFilter.value === 'public') {
+    return wallsStore.publicWalls
+  }
+  // all: user's own walls + public walls from others
+  const userWallIds = new Set(wallsStore.walls.map(w => w.id))
+  return [...wallsStore.walls, ...wallsStore.publicWalls.filter(w => !userWallIds.has(w.id))]
+})
+
+const visibleFrames = computed(() => {
+  if (visibilityFilter.value === 'private') {
+    return picturesStore.pictures
+  }
+  if (visibilityFilter.value === 'public') {
+    return picturesStore.publicPictures
+  }
+  const userIds = new Set(picturesStore.pictures.map(p => p.id))
+  return [...picturesStore.pictures, ...picturesStore.publicPictures.filter(p => !userIds.has(p.id))]
+})
+
 const filteredItems = computed(() => {
   if (activeTab.value === 'walls') {
-    return { walls: wallsStore.walls, frames: [] }
+    return { walls: visibleWalls.value, frames: [] }
   }
   if (activeTab.value === 'frames') {
-    return { walls: [], frames: picturesStore.pictures }
+    return { walls: [], frames: visibleFrames.value }
   }
-  return { walls: wallsStore.walls, frames: picturesStore.pictures }
+  return { walls: visibleWalls.value, frames: visibleFrames.value }
 })
 
 const hasContent = computed(() => {
-  return wallsStore.walls.length > 0 || picturesStore.pictures.length > 0
+  return visibleWalls.value.length > 0 || visibleFrames.value.length > 0
 })
+
+const isMyWall = (wall) => wall.user_id === authStore.user?.id
+const isMyFrame = (frame) => frame.user_id === authStore.user?.id
+
+const toggleWallPrivacy = async (wall) => {
+  try {
+    await wallsStore.updateWall(wall.id, { is_private: !wall.is_private })
+    await wallsStore.fetchPublicWalls()
+  } catch (err) {
+    alert('Failed to update wall privacy')
+  }
+}
+
+const toggleFramePrivacy = async (frame) => {
+  try {
+    await picturesStore.updatePicture(frame.id, { is_private: frame.is_private !== false })
+    await picturesStore.fetchPublicPictures()
+  } catch (err) {
+    alert('Failed to update frame privacy')
+  }
+}
 
 const openFrameDetails = (frame) => {
   selectedFrame.value = frame
@@ -373,7 +422,8 @@ const startEditingWall = (wall) => {
   editingWall.value = wall
   wallEditForm.value = {
     name: wall.name || '',
-    description: wall.description || ''
+    description: wall.description || '',
+    is_private: wall.is_private !== false
   }
 }
 
@@ -388,9 +438,10 @@ const saveWallEdit = async () => {
   try {
     await wallsStore.updateWall(editingWall.value.id, {
       name: wallEditForm.value.name.trim(),
-      description: wallEditForm.value.description.trim() || null
+      description: wallEditForm.value.description.trim() || null,
+      is_private: wallEditForm.value.is_private
     })
-    await wallsStore.fetchWalls()
+    await Promise.all([wallsStore.fetchWalls(), wallsStore.fetchPublicWalls()])
     editingWall.value = null
   } catch (err) {
     console.error('Failed to update wall:', err)
@@ -545,20 +596,20 @@ const getFrameDimensions = (frame) => {
     </div>
 
     <!-- Tab filters -->
-    <div class="flex gap-2 mb-6">
+    <div class="flex gap-2 mb-3">
       <button
         @click="activeTab = 'all'"
         class="px-4 py-2 rounded-lg transition"
         :class="activeTab === 'all' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
       >
-        All
+        Everything
       </button>
       <button
         @click="activeTab = 'walls'"
         class="px-4 py-2 rounded-lg transition"
         :class="activeTab === 'walls' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
       >
-        Walls ({{ wallsStore.walls.length }})
+        Walls ({{ visibleWalls.length }})
       </button>
       <button
         @click="activeTab = 'frames'"
@@ -566,6 +617,37 @@ const getFrameDimensions = (frame) => {
         :class="activeTab === 'frames' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
       >
         Frames ({{ picturesStore.pictures.length }})
+      </button>
+    </div>
+
+    <!-- Visibility filter (walls only) -->
+    <div v-if="activeTab !== 'frames'" class="flex gap-2 mb-6">
+      <button
+        @click="visibilityFilter = 'private'"
+        class="px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1.5"
+        :class="visibilityFilter === 'private' ? 'bg-gray-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        Private
+      </button>
+      <button
+        @click="visibilityFilter = 'public'"
+        class="px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1.5"
+        :class="visibilityFilter === 'public' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Public
+      </button>
+      <button
+        @click="visibilityFilter = 'all'"
+        class="px-3 py-1.5 rounded-lg text-sm transition"
+        :class="visibilityFilter === 'all' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
+      >
+        All
       </button>
     </div>
 
@@ -614,7 +696,15 @@ const getFrameDimensions = (frame) => {
                 class="w-full h-full object-cover"
               />
             </div>
-            <h3 class="font-medium mb-1">{{ wall.name }}</h3>
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="font-medium">{{ wall.name }}</h3>
+              <span
+                class="text-xs px-1.5 py-0.5 rounded"
+                :class="wall.is_private !== false ? 'bg-gray-700 text-gray-400' : 'bg-primary-900/50 text-primary-400'"
+              >
+                {{ wall.is_private !== false ? 'Private' : 'Public' }}
+              </span>
+            </div>
             <p class="text-sm text-gray-400 mb-3">
               {{ getWallFrameCount(wall) }} frame(s) assigned
             </p>
@@ -625,23 +715,38 @@ const getFrameDimensions = (frame) => {
               >
                 Open
               </button>
-              <button
-                @click="startEditingWall(wall)"
-                class="btn btn-secondary"
-                title="Edit wall"
-              >
-                ✎
-              </button>
-              <button
-                @click="deleteWall(wall.id)"
-                class="btn bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white"
-                title="Delete wall"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+              <template v-if="isMyWall(wall)">
+                <button
+                  @click="toggleWallPrivacy(wall)"
+                  class="btn btn-secondary"
+                  :title="wall.is_private !== false ? 'Make public' : 'Make private'"
+                >
+                  <!-- Globe when public; lock when private -->
+                  <svg v-if="wall.is_private === false" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </button>
+                <button
+                  @click="startEditingWall(wall)"
+                  class="btn btn-secondary"
+                  title="Edit wall"
+                >
+                  ✎
+                </button>
+                <button
+                  @click="deleteWall(wall.id)"
+                  class="btn bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white"
+                  title="Delete wall"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </template>
             </div>
           </div>
         </div>
@@ -659,15 +764,36 @@ const getFrameDimensions = (frame) => {
             @click="openFrameDetails(frame)"
             class="card p-2 cursor-pointer hover:ring-2 hover:ring-primary-500 transition"
           >
-            <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden mb-2">
+            <div class="relative aspect-square bg-dark-300 rounded-lg overflow-hidden mb-2">
               <img
                 :src="getImageUrl(frame.thumbnail_path || frame.image_path)"
                 :alt="frame.name"
                 class="w-full h-full object-cover"
               />
+              <button
+                v-if="isMyFrame(frame)"
+                @click.stop="toggleFramePrivacy(frame)"
+                class="absolute top-1 right-1 p-1 rounded bg-black/50 text-gray-300 hover:text-white transition"
+                :title="frame.is_private !== false ? 'Make public' : 'Make private'"
+              >
+                <svg v-if="frame.is_private === false" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </button>
             </div>
-            <h3 class="font-medium truncate">{{ frame.name }}</h3>
-            <p class="text-sm text-gray-400">
+            <div class="flex items-center gap-1.5 mb-0.5">
+              <h3 class="font-medium truncate text-sm">{{ frame.name }}</h3>
+              <span
+                class="text-xs px-1 py-0.5 rounded flex-shrink-0"
+                :class="frame.is_private !== false ? 'bg-gray-700 text-gray-500' : 'bg-primary-900/50 text-primary-400'"
+              >
+                {{ frame.is_private !== false ? 'Private' : 'Public' }}
+              </span>
+            </div>
+            <p class="text-xs text-gray-400">
               <span v-if="getWallName(frame.wall_id)">{{ getWallName(frame.wall_id) }}</span>
               <span v-else class="text-gray-500">Not assigned</span>
             </p>
@@ -1138,6 +1264,30 @@ const getFrameDimensions = (frame) => {
             rows="3"
             class="w-full px-4 py-3 bg-dark-300 border border-gray-600 rounded-lg focus:border-primary-500 focus:outline-none resize-none"
           ></textarea>
+          <div class="flex items-center justify-between p-3 bg-dark-300 rounded-lg">
+            <div>
+              <p class="text-sm font-medium">Visibility</p>
+              <p class="text-xs text-gray-400">{{ wallEditForm.is_private ? 'Only you can see this wall' : 'Anyone can see this wall' }}</p>
+            </div>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                @click="wallEditForm.is_private = true"
+                class="px-3 py-1.5 rounded text-xs transition"
+                :class="wallEditForm.is_private ? 'bg-gray-600 text-white' : 'bg-dark-100 text-gray-400'"
+              >
+                Private
+              </button>
+              <button
+                type="button"
+                @click="wallEditForm.is_private = false"
+                class="px-3 py-1.5 rounded text-xs transition"
+                :class="!wallEditForm.is_private ? 'bg-primary-600 text-white' : 'bg-dark-100 text-gray-400'"
+              >
+                Public
+              </button>
+            </div>
+          </div>
         </div>
         <div class="flex gap-3 mt-6">
           <button

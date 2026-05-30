@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.settings import settings
 from app.db import get_db
 from app.models import Wall, User
-from app.routers.auth import get_current_user  # reuse auth dependency
+from app.routers.auth import get_current_user, get_optional_current_user
 from app.services.image_processor import process_wall_image
 
 router = APIRouter()
@@ -43,6 +43,7 @@ class WallUpdateRequest(BaseModel):
     background_color: Optional[str] = None
     scene_config: Optional[Dict[str, Any]] = None
     frame_placements: Optional[List[Dict[str, Any]]] = None
+    is_private: Optional[bool] = None
 
 
 class PlacementRequest(BaseModel):
@@ -64,6 +65,20 @@ def get_walls(
     walls = (
         db.query(Wall)
         .filter(Wall.user_id == current_user.id)
+        .order_by(Wall.created_at.desc())
+        .all()
+    )
+    return {"walls": [w.to_dict(include_placements=True) for w in walls]}
+
+
+@router.get("/public", status_code=200)
+def get_public_walls(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    walls = (
+        db.query(Wall)
+        .filter(Wall.is_private == False)  # noqa: E712
         .order_by(Wall.created_at.desc())
         .all()
     )
@@ -194,7 +209,7 @@ def update_wall(
 
     data = payload.model_dump(exclude_unset=True)
 
-    for field in ("name", "description", "width_cm", "height_cm", "background_color", "scene_config"):
+    for field in ("name", "description", "width_cm", "height_cm", "background_color", "scene_config", "is_private"):
         if field in data:
             setattr(wall, field, data[field])
 

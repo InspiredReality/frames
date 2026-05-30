@@ -8,10 +8,10 @@ const authStore = useAuthStore()
   <div class="max-w-4xl mx-auto text-center py-12">
     <!-- Hero Section -->
     <h1 class="text-4xl md:text-5xl font-bold mb-6">
-      Visualize Your Art on <span class="text-primary-500">Any Wall</span>
+      Visualize Photos & Art on <span class="text-primary-500">Your Walls</span>
     </h1>
     <p class="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
-      Take a photo of your wall and picture frames, then arrange them to see exactly how they look before hanging. Perfect for galleries, home decor, and interior design.
+      Take a photo of your wall and picture frames, then arrange them to see exactly how they would look before committing to hanging them. Perfect for galleries, home decor, and interior design.
     </p>
 
     <!-- CTA Buttons -->
@@ -25,11 +25,14 @@ const authStore = useAuthStore()
         </router-link>
       </template>
       <template v-else>
+        <router-link to="/public-gallery" class="btn btn-secondary text-lg px-8 py-3">
+          Explore Public Walls
+        </router-link>
         <router-link to="/register" class="btn btn-primary text-lg px-8 py-3">
-          Get Started Free
+          Create Account
         </router-link>
         <router-link to="/login" class="btn btn-secondary text-lg px-8 py-3">
-          Sign In
+          Login
         </router-link>
       </template>
     </div>
@@ -43,7 +46,7 @@ const authStore = useAuthStore()
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </div>
-        <h3 class="text-xl font-semibold mb-2">Capture Frames</h3>
+        <h3 class="text-xl font-semibold mb-2">Capture Frames & Walls</h3>
         <p class="text-gray-400">
           Take a photo of any picture frame and specify its real-world dimensions in inches or centimeters.
         </p>
@@ -67,7 +70,7 @@ const authStore = useAuthStore()
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         </div>
-        <h3 class="text-xl font-semibold mb-2">Visualize on your Walls</h3>
+        <h3 class="text-xl font-semibold mb-2">Conceptualize Frames on Walls</h3>
         <p class="text-gray-400">
           Place your framed pictures on captured walls and see how they look before committing.
         </p>
@@ -80,10 +83,17 @@ const authStore = useAuthStore()
       <div class="grid md:grid-cols-4 gap-6">
         <div class="text-center">
           <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
+            3
+          </div>
+          <h4 class="font-semibold mb-1">Add Wall</h4>
+          <p class="text-sm text-gray-400">Take or upload photo of your empty wall</p>
+        </div>
+        <div class="text-center">
+          <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
             1
           </div>
-          <h4 class="font-semibold mb-1">Capture Frame</h4>
-          <p class="text-sm text-gray-400">Photo your picture frame</p>
+          <h4 class="font-semibold mb-1">Add Frames</h4>
+          <p class="text-sm text-gray-400">Take or upload photo of your picture frames</p>
         </div>
         <div class="text-center">
           <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
@@ -94,17 +104,10 @@ const authStore = useAuthStore()
         </div>
         <div class="text-center">
           <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
-            3
-          </div>
-          <h4 class="font-semibold mb-1">Capture Wall</h4>
-          <p class="text-sm text-gray-400">Photo your empty wall</p>
-        </div>
-        <div class="text-center">
-          <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
             4
           </div>
           <h4 class="font-semibold mb-1">Place & Preview</h4>
-          <p class="text-sm text-gray-400">Arrange frames in 3D</p>
+          <p class="text-sm text-gray-400">Arrange Frames in 3D</p>
         </div>
       </div>
     </div>

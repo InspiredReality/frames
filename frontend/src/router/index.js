@@ -8,6 +8,11 @@ const routes = [
     component: () => import('@/views/Home.vue')
   },
   {
+    path: '/public-gallery',
+    name: 'public-gallery',
+    component: () => import('@/views/PublicGallery.vue')
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/Login.vue'),
@@ -18,6 +23,17 @@ const routes = [
     name: 'register',
     component: () => import('@/views/Register.vue'),
     meta: { guest: true }
+  },
+  {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('@/views/ForgotPassword.vue'),
+    meta: { guest: true }
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('@/views/ResetPassword.vue'),
   },
   {
     path: '/capture/frame',

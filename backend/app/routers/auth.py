@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import os
 from typing import Optional
 
+import resend
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
@@ -11,6 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.models import User
 from app.db import get_db  # you will create this (example below)
+
+resend.api_key = os.getenv("RESEND_API_KEY", "")
+APP_URL = os.getenv("APP_URL", "http://localhost:5173")
 
 router = APIRouter()
 
@@ -30,6 +34,36 @@ def create_access_token(user_id: int) -> str:
         "sub": str(user_id),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=JWT_EXPIRES_MINUTES)).timestamp()),
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def get_optional_current_user(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    if creds is None or creds.scheme.lower() != "bearer":
+        return None
+    try:
+        payload = jwt.decode(creds.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        sub = payload.get("sub")
+        if not sub:
+            return None
+        return db.get(User, int(sub))
+    except (JWTError, ValueError):
+        return None
+
+
+PASSWORD_RESET_EXPIRES_MINUTES = 15
+
+
+def create_reset_token(user_id: int) -> str:
+    now = datetime.utcnow()
+    payload = {
+        "sub": str(user_id),
+        "type": "password_reset",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=PASSWORD_RESET_EXPIRES_MINUTES)).timestamp()),
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
@@ -84,6 +118,15 @@ class LoginRequest(BaseModel):
 class UpdateMeRequest(BaseModel):
     username: Optional[str] = Field(default=None, min_length=2, max_length=50)
     password: Optional[str] = Field(default=None, min_length=6, max_length=128)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=6, max_length=128)
 
 
 class UserResponse(BaseModel):
@@ -168,3 +211,55 @@ def update_me(
     db.refresh(current_user)
 
     return {"user": current_user.to_dict()}
+
+
+@router.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        return {"message": "If that email is registered, you'll receive a reset link shortly."}
+
+    token = create_reset_token(user.id)
+    reset_url = f"{APP_URL}/reset-password?token={token}"
+
+    resend.Emails.send({
+        "from": "Frames <noreply@frames.inspiredreality.space>",
+        "to": [user.email],
+        "subject": "Reset your Frames password",
+        "html": f"""
+            <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+                <h2>Reset your password</h2>
+                <p>Click the button below to reset your Frames password. This link expires in 15 minutes.</p>
+                <a href="{reset_url}"
+                   style="display: inline-block; padding: 12px 24px; background: #6366f1;
+                          color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+                    Reset Password
+                </a>
+                <p style="color: #888; font-size: 12px;">
+                    If you didn't request this, you can safely ignore this email.
+                </p>
+            </div>
+        """,
+    })
+
+    return {"message": "If that email is registered, you'll receive a reset link shortly."}
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        data = jwt.decode(payload.token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if data.get("type") != "password_reset":
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    user = db.get(User, int(data["sub"]))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.set_password(payload.new_password)
+    db.commit()
+
+    return {"message": "Password reset successfully"}

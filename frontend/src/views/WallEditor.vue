@@ -19,6 +19,7 @@ const saving = ref(false)
 const error = ref('')
 const saveError = ref('')
 const showFramePicker = ref(false)
+const wallViewerRef = ref(null)
 
 // Frame editing state
 const selectedPlacementIndex = ref(null)
@@ -143,6 +144,60 @@ const removeFrame = async (placementIndex) => {
     await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
   } catch (err) {
     error.value = 'Failed to remove frame'
+  } finally {
+    saving.value = false
+  }
+}
+
+const toggleFrameVisibility = async (placementIndex) => {
+  try {
+    saving.value = true
+    const placements = [...(wall.value.frame_placements || [])]
+    const current = placements[placementIndex]
+    placements[placementIndex] = { ...current, visible: current.visible === false }
+    await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
+  } catch (err) {
+    error.value = 'Failed to update frame visibility'
+  } finally {
+    saving.value = false
+  }
+}
+
+const savedLayouts = computed(() => wall.value?.scene_config?.layouts || [])
+
+const saveLayout = async () => {
+  try {
+    saving.value = true
+    const thumbnail = wallViewerRef.value?.captureScreenshot() || null
+    const layouts = JSON.parse(JSON.stringify(wall.value?.scene_config?.layouts || []))
+    layouts.push({
+      id: Date.now().toString(),
+      name: `Layout ${layouts.length + 1}`,
+      created_at: new Date().toISOString(),
+      frame_placements: JSON.parse(JSON.stringify(wall.value.frame_placements || [])),
+      width_cm: wall.value.width_cm,
+      height_cm: wall.value.height_cm,
+      thumbnail
+    })
+    const scene_config = { ...(wall.value.scene_config || {}), layouts }
+    await wallsStore.updateWall(wall.value.id, { scene_config })
+  } catch (err) {
+    error.value = 'Failed to save layout'
+  } finally {
+    saving.value = false
+  }
+}
+
+const restoreLayout = async (layout) => {
+  try {
+    saving.value = true
+    await wallsStore.updateWall(wall.value.id, {
+      frame_placements: JSON.parse(JSON.stringify(layout.frame_placements)),
+      width_cm: layout.width_cm,
+      height_cm: layout.height_cm
+    })
+  } catch (err) {
+    error.value = 'Failed to restore layout'
   } finally {
     saving.value = false
   }
@@ -720,6 +775,7 @@ const getFrameDimensions = (frame) => {
       <!-- 3D Wall Viewer -->
       <div class="card mb-6">
         <WallViewer
+          ref="wallViewerRef"
           :wallImageUrl="getImageUrl(wall.image_path)"
           :wallWidthCm="wall.width_cm || 0"
           :wallHeightCm="wall.height_cm || 0"
@@ -729,6 +785,15 @@ const getFrameDimensions = (frame) => {
           @frameMoved="onFrameMoved"
         />
         <p class="text-xs text-gray-500 mt-2 text-center">Left-click and drag frames to move them. Right-click and drag to rotate the view.</p>
+        <div class="mt-3 flex justify-center">
+          <button
+            @click="saveLayout"
+            :disabled="saving"
+            class="btn btn-secondary text-sm"
+          >
+            {{ saving ? 'Saving...' : 'Save Layout' }}
+          </button>
+        </div>
       </div>
 
       <!-- Wall Details -->
@@ -920,7 +985,7 @@ const getFrameDimensions = (frame) => {
       />
 
       <!-- Placed frames list -->
-      <div class="card">
+      <div class="card mb-4">
         <h3 class="font-semibold mb-4">Placed Frames ({{ wall.frame_placements?.length || 0 }})</h3>
 
         <div v-if="!wall.frame_placements?.length" class="text-center py-6 text-gray-400">
@@ -933,9 +998,10 @@ const getFrameDimensions = (frame) => {
             :key="index"
             @click="selectFrame(index)"
             class="flex items-center justify-between bg-dark-300 rounded-lg p-3 cursor-pointer hover:ring-2 hover:ring-primary-500 transition"
+            :class="{ 'opacity-50': placement.visible === false }"
           >
             <div class="flex items-center gap-3">
-              <div class="w-12 h-12 bg-dark-100 rounded overflow-hidden">
+              <div class="w-12 h-12 bg-dark-100 rounded overflow-hidden flex-shrink-0">
                 <img
                   v-if="allFrames.find(f => f.id === placement.frame_id)?.pictureImage"
                   :src="getImageUrl(allFrames.find(f => f.id === placement.frame_id).pictureImage)"
@@ -952,13 +1018,57 @@ const getFrameDimensions = (frame) => {
               </div>
             </div>
             <button
-              @click.stop="removeFrame(index)"
-              class="text-red-400 hover:text-red-300"
+              @click.stop="toggleFrameVisibility(index)"
+              class="text-gray-400 hover:text-gray-200 transition-colors flex-shrink-0"
+              :title="placement.visible === false ? 'Show frame' : 'Hide frame'"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <svg v-if="placement.visible === false" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+              </svg>
+              <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Saved Layouts -->
+      <div class="card">
+        <h3 class="font-semibold mb-4">Saved Layouts ({{ savedLayouts.length }})</h3>
+
+        <div v-if="!savedLayouts.length" class="text-center py-6 text-gray-400">
+          No layouts saved yet. Click "Save Layout" above to capture the current arrangement.
+        </div>
+
+        <div v-else class="space-y-3">
+          <div
+            v-for="layout in savedLayouts"
+            :key="layout.id"
+            @click="restoreLayout(layout)"
+            class="flex items-center gap-3 bg-dark-300 rounded-lg p-3 cursor-pointer hover:ring-2 hover:ring-primary-500 transition"
+          >
+            <div class="w-12 h-12 bg-dark-100 rounded overflow-hidden flex-shrink-0">
+              <img
+                v-if="layout.thumbnail"
+                :src="layout.thumbnail"
+                class="w-full h-full object-cover"
+              />
+              <div v-else class="w-full h-full flex items-center justify-center text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <p class="font-medium">{{ layout.name }}</p>
+              <p class="text-sm text-gray-400">
+                {{ layout.frame_placements?.length || 0 }} frame{{ (layout.frame_placements?.length || 0) !== 1 ? 's' : '' }}
+                &middot;
+                {{ new Date(layout.created_at).toLocaleDateString() }}
+              </p>
+            </div>
           </div>
         </div>
       </div>
