@@ -148,6 +148,20 @@ const removeFrame = async (placementIndex) => {
   }
 }
 
+const toggleFrameVisibility = async (placementIndex) => {
+  try {
+    saving.value = true
+    const placements = [...(wall.value.frame_placements || [])]
+    const current = placements[placementIndex]
+    placements[placementIndex] = { ...current, visible: current.visible === false }
+    await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
+  } catch (err) {
+    error.value = 'Failed to update frame visibility'
+  } finally {
+    saving.value = false
+  }
+}
+
 const getImageUrl = (path) => getUploadUrl(path)
 
 // Get selected placement and frame data
@@ -933,6 +947,7 @@ const getFrameDimensions = (frame) => {
             :key="index"
             @click="selectFrame(index)"
             class="flex items-center justify-between bg-dark-300 rounded-lg p-3 cursor-pointer hover:ring-2 hover:ring-primary-500 transition"
+            :class="{ 'opacity-50': placement.visible === false }"
           >
             <div class="flex items-center gap-3">
               <div class="w-12 h-12 bg-dark-100 rounded overflow-hidden">
@@ -952,11 +967,18 @@ const getFrameDimensions = (frame) => {
               </div>
             </div>
             <button
-              @click.stop="removeFrame(index)"
-              class="text-red-400 hover:text-red-300"
+              @click.stop="toggleFrameVisibility(index)"
+              class="text-gray-400 hover:text-gray-200 transition-colors"
+              :title="placement.visible === false ? 'Show frame' : 'Hide frame'"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <!-- Eye-off icon when hidden -->
+              <svg v-if="placement.visible === false" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+              </svg>
+              <!-- Eye icon when visible -->
+              <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </button>
           </div>

@@ -374,6 +374,7 @@ const updateFrames = () => {
   sortedPlacements.forEach(({ placement, originalIndex }, sortedIndex) => {
     const frame = props.frames.find(f => f.id === placement.frame_id)
     if (!frame) return
+    if (placement.visible === false) return
 
     const dims = frame.dimensions?.cm || { width: 20, height: 25, depth: 2 }
     const scale = 0.01 // Convert cm to scene units
