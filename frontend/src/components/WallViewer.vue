@@ -52,7 +52,7 @@ const initScene = () => {
   mouse = new THREE.Vector2()
 
   // Renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
   renderer.setSize(width, height)
   renderer.setPixelRatio(window.devicePixelRatio)
   containerRef.value.appendChild(renderer.domElement)
@@ -374,6 +374,7 @@ const updateFrames = () => {
   sortedPlacements.forEach(({ placement, originalIndex }, sortedIndex) => {
     const frame = props.frames.find(f => f.id === placement.frame_id)
     if (!frame) return
+    if (placement.visible === false) return
 
     const dims = frame.dimensions?.cm || { width: 20, height: 25, depth: 2 }
     const scale = 0.01 // Convert cm to scene units
@@ -486,6 +487,14 @@ watch(() => props.wallWidthCm, createWall)
 watch(() => props.wallHeightCm, createWall)
 watch(() => props.framePlacements, updateFrames, { deep: true })
 watch(() => props.frames, updateFrames, { deep: true })
+
+const captureScreenshot = () => {
+  if (!renderer || !scene || !camera) return null
+  renderer.render(scene, camera)
+  return renderer.domElement.toDataURL('image/jpeg', 0.7)
+}
+
+defineExpose({ captureScreenshot })
 
 onMounted(() => {
   initScene()
