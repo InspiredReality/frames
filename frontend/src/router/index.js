@@ -20,6 +20,18 @@ const routes = [
     meta: { guest: true }
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('@/views/ForgotPassword.vue'),
+    meta: { guest: true }
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('@/views/ResetPassword.vue'),
+    meta: { guest: true }
+  },
+  {
     path: '/capture/frame',
     name: 'capture-frame',
     component: () => import('@/views/CaptureFrame.vue'),

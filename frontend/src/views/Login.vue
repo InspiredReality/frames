@@ -68,7 +68,13 @@ const handleSubmit = async () => {
         </button>
       </form>
 
-      <p class="mt-6 text-center text-gray-400">
+      <div class="mt-4 text-center">
+        <router-link to="/forgot-password" class="text-sm text-gray-400 hover:text-primary-400">
+          Forgot password?
+        </router-link>
+      </div>
+
+      <p class="mt-4 text-center text-gray-400">
         Don't have an account?
         <router-link to="/register" class="text-primary-500 hover:underline">
           Sign up

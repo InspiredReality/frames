@@ -1,6 +1,6 @@
 """Wall model for storing virtual wall configurations."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, Float, String, Text, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, Text, DateTime, JSON, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from app.db import Base
@@ -25,6 +25,9 @@ class Wall(Base):
     # Wall dimensions (estimated or user-provided)
     width_cm = Column(Float)
     height_cm = Column(Float)
+
+    # Privacy: True = only visible to owner, False = visible to all users
+    is_private = Column(Boolean, default=True, nullable=False)
 
     # 3D scene configuration (JSON)
     scene_config = Column(JSON, default=dict)
@@ -51,6 +54,7 @@ class Wall(Base):
             'background_color': self.background_color,
             'width_cm': self.width_cm,
             'height_cm': self.height_cm,
+            'is_private': self.is_private if self.is_private is not None else True,
             'scene_config': self.scene_config,
             'frame_count': self.pictures.count(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
