@@ -69,6 +69,7 @@ onMounted(async () => {
   try {
     await Promise.all([
       picturesStore.fetchPictures(),
+      picturesStore.fetchPublicPictures(),
       wallsStore.fetchWalls(),
       wallsStore.fetchPublicWalls()
     ])
@@ -93,21 +94,33 @@ const visibleWalls = computed(() => {
   return [...wallsStore.walls, ...wallsStore.publicWalls.filter(w => !userWallIds.has(w.id))]
 })
 
+const visibleFrames = computed(() => {
+  if (visibilityFilter.value === 'private') {
+    return picturesStore.pictures
+  }
+  if (visibilityFilter.value === 'public') {
+    return picturesStore.publicPictures
+  }
+  const userIds = new Set(picturesStore.pictures.map(p => p.id))
+  return [...picturesStore.pictures, ...picturesStore.publicPictures.filter(p => !userIds.has(p.id))]
+})
+
 const filteredItems = computed(() => {
   if (activeTab.value === 'walls') {
     return { walls: visibleWalls.value, frames: [] }
   }
   if (activeTab.value === 'frames') {
-    return { walls: [], frames: picturesStore.pictures }
+    return { walls: [], frames: visibleFrames.value }
   }
-  return { walls: visibleWalls.value, frames: picturesStore.pictures }
+  return { walls: visibleWalls.value, frames: visibleFrames.value }
 })
 
 const hasContent = computed(() => {
-  return visibleWalls.value.length > 0 || picturesStore.pictures.length > 0
+  return visibleWalls.value.length > 0 || visibleFrames.value.length > 0
 })
 
 const isMyWall = (wall) => wall.user_id === authStore.user?.id
+const isMyFrame = (frame) => frame.user_id === authStore.user?.id
 
 const toggleWallPrivacy = async (wall) => {
   try {
@@ -115,6 +128,15 @@ const toggleWallPrivacy = async (wall) => {
     await wallsStore.fetchPublicWalls()
   } catch (err) {
     alert('Failed to update wall privacy')
+  }
+}
+
+const toggleFramePrivacy = async (frame) => {
+  try {
+    await picturesStore.updatePicture(frame.id, { is_private: frame.is_private !== false })
+    await picturesStore.fetchPublicPictures()
+  } catch (err) {
+    alert('Failed to update frame privacy')
   }
 }
 
@@ -699,11 +721,12 @@ const getFrameDimensions = (frame) => {
                   class="btn btn-secondary"
                   :title="wall.is_private !== false ? 'Make public' : 'Make private'"
                 >
-                  <svg v-if="wall.is_private !== false" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  <!-- Globe when public; lock when private -->
+                  <svg v-if="wall.is_private === false" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 018 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </button>
                 <button
@@ -741,15 +764,36 @@ const getFrameDimensions = (frame) => {
             @click="openFrameDetails(frame)"
             class="card p-2 cursor-pointer hover:ring-2 hover:ring-primary-500 transition"
           >
-            <div class="aspect-square bg-dark-300 rounded-lg overflow-hidden mb-2">
+            <div class="relative aspect-square bg-dark-300 rounded-lg overflow-hidden mb-2">
               <img
                 :src="getImageUrl(frame.thumbnail_path || frame.image_path)"
                 :alt="frame.name"
                 class="w-full h-full object-cover"
               />
+              <button
+                v-if="isMyFrame(frame)"
+                @click.stop="toggleFramePrivacy(frame)"
+                class="absolute top-1 right-1 p-1 rounded bg-black/50 text-gray-300 hover:text-white transition"
+                :title="frame.is_private !== false ? 'Make public' : 'Make private'"
+              >
+                <svg v-if="frame.is_private === false" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </button>
             </div>
-            <h3 class="font-medium truncate">{{ frame.name }}</h3>
-            <p class="text-sm text-gray-400">
+            <div class="flex items-center gap-1.5 mb-0.5">
+              <h3 class="font-medium truncate text-sm">{{ frame.name }}</h3>
+              <span
+                class="text-xs px-1 py-0.5 rounded flex-shrink-0"
+                :class="frame.is_private !== false ? 'bg-gray-700 text-gray-500' : 'bg-primary-900/50 text-primary-400'"
+              >
+                {{ frame.is_private !== false ? 'Private' : 'Public' }}
+              </span>
+            </div>
+            <p class="text-xs text-gray-400">
               <span v-if="getWallName(frame.wall_id)">{{ getWallName(frame.wall_id) }}</span>
               <span v-else class="text-gray-500">Not assigned</span>
             </p>

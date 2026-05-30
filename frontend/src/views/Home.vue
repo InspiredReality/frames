@@ -25,8 +25,11 @@ const authStore = useAuthStore()
         </router-link>
       </template>
       <template v-else>
+        <router-link to="/public-gallery" class="btn btn-secondary text-lg px-8 py-3">
+          Explore Public Walls
+        </router-link>
         <router-link to="/register" class="btn btn-primary text-lg px-8 py-3">
-          Get Started Free
+          Create Account
         </router-link>
         <router-link to="/login" class="btn btn-secondary text-lg px-8 py-3">
           Sign In

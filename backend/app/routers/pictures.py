@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.settings import settings
 from app.db import get_db
 from app.models import Picture, PictureFrame, User
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, get_optional_current_user
 from app.services.image_processor import process_picture_image
 from app.services.model_generator import generate_frame_model
 from app.utils.uploads import make_safe_filename, save_upload_with_limit, verify_image_file
@@ -24,7 +24,8 @@ router = APIRouter()
 class PictureUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    wall_id: Optional[int] = None  # can be None to unassign
+    wall_id: Optional[int] = None
+    is_private: Optional[bool] = None
 
 
 class FrameCreateRequest(BaseModel):
@@ -79,6 +80,20 @@ def get_pictures(
     pictures = (
         db.query(Picture)
         .filter(Picture.user_id == current_user.id)
+        .order_by(Picture.created_at.desc())
+        .all()
+    )
+    return {"pictures": [p.to_dict(include_frames=True) for p in pictures]}
+
+
+@router.get("/public", status_code=200)
+def get_public_pictures(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    pictures = (
+        db.query(Picture)
+        .filter(Picture.is_private == False)  # noqa: E712
         .order_by(Picture.created_at.desc())
         .all()
     )
@@ -182,7 +197,9 @@ def update_picture(
     if "description" in data:
         picture.description = data["description"]
     if "wall_id" in data:
-        picture.wall_id = data["wall_id"]  # can be None
+        picture.wall_id = data["wall_id"]
+    if "is_private" in data and data["is_private"] is not None:
+        picture.is_private = data["is_private"]
 
     db.commit()
     db.refresh(picture)

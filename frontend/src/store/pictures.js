@@ -4,6 +4,7 @@ import api from '@/services/api'
 
 export const usePicturesStore = defineStore('pictures', () => {
   const pictures = ref([])
+  const publicPictures = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -19,6 +20,17 @@ export const usePicturesStore = defineStore('pictures', () => {
       throw err
     } finally {
       loading.value = false
+    }
+  }
+
+  async function fetchPublicPictures() {
+    try {
+      const response = await api.get('/pictures/public')
+      publicPictures.value = response.data.pictures
+      return publicPictures.value
+    } catch (err) {
+      error.value = err.message
+      throw err
     }
   }
 
@@ -98,9 +110,11 @@ export const usePicturesStore = defineStore('pictures', () => {
 
   return {
     pictures,
+    publicPictures,
     loading,
     error,
     fetchPictures,
+    fetchPublicPictures,
     uploadPicture,
     updatePicture,
     createFrame,

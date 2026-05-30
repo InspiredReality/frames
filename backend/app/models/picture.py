@@ -1,6 +1,6 @@
 """Picture and PictureFrame models."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from app.db import Base
@@ -13,23 +13,22 @@ class Picture(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
-    wall_id = Column(Integer, ForeignKey('walls.id'), nullable=True, index=True)  # Optional wall assignment
+    wall_id = Column(Integer, ForeignKey('walls.id'), nullable=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
 
-    # Image paths
     image_path = Column(String(500), nullable=False)
-    original_image_path = Column(String(500))  # Preserved original from capture
+    original_image_path = Column(String(500))
     thumbnail_path = Column(String(500))
 
-    # Original image dimensions (pixels)
     width_px = Column(Integer)
     height_px = Column(Integer)
+
+    is_private = Column(Boolean, default=True, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationship to frames
     frames = relationship('PictureFrame', backref='picture', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self, include_frames=False):
@@ -45,6 +44,7 @@ class Picture(Base):
             'thumbnail_path': self.thumbnail_path,
             'width_px': self.width_px,
             'height_px': self.height_px,
+            'is_private': self.is_private if self.is_private is not None else True,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
