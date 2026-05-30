@@ -57,7 +57,7 @@ const getFrameDimensions = (picture) => {
           Create Account
         </router-link>
         <router-link to="/login" class="btn btn-secondary">
-          Sign In
+          Login
         </router-link>
       </div>
     </div>

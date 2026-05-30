@@ -32,7 +32,7 @@ const authStore = useAuthStore()
           Create Account
         </router-link>
         <router-link to="/login" class="btn btn-secondary text-lg px-8 py-3">
-          Sign In
+          Login
         </router-link>
       </template>
     </div>
