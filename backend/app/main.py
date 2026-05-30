@@ -64,6 +64,11 @@ def create_app() -> FastAPI:
             conn.commit()
         except Exception:
             conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE pictures ADD COLUMN is_private BOOLEAN DEFAULT TRUE"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     # -------------------
     # CORS

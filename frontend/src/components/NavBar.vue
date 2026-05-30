@@ -46,6 +46,9 @@ const logout = () => {
             </button>
           </template>
           <template v-else>
+            <router-link to="/public-gallery" class="text-gray-300 hover:text-white transition">
+              Public Gallery
+            </router-link>
             <router-link to="/login" class="text-gray-300 hover:text-white transition">
               Login
             </router-link>
@@ -84,6 +87,9 @@ const logout = () => {
           </button>
         </template>
         <template v-else>
+          <router-link to="/public-gallery" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
+            Public Gallery
+          </router-link>
           <router-link to="/login" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
             Login
           </router-link>

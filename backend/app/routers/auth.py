@@ -34,6 +34,22 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
+def get_optional_current_user(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    if creds is None or creds.scheme.lower() != "bearer":
+        return None
+    try:
+        payload = jwt.decode(creds.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        sub = payload.get("sub")
+        if not sub:
+            return None
+        return db.get(User, int(sub))
+    except (JWTError, ValueError):
+        return None
+
+
 PASSWORD_RESET_EXPIRES_MINUTES = 15
 
 

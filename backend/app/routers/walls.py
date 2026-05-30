@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.settings import settings
 from app.db import get_db
 from app.models import Wall, User
-from app.routers.auth import get_current_user  # reuse auth dependency
+from app.routers.auth import get_current_user, get_optional_current_user
 from app.services.image_processor import process_wall_image
 
 router = APIRouter()
@@ -74,7 +74,7 @@ def get_walls(
 @router.get("/public", status_code=200)
 def get_public_walls(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     walls = (
         db.query(Wall)
