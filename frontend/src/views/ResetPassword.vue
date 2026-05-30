@@ -57,16 +57,7 @@ const handleSubmit = async () => {
           {{ error }}
         </div>
 
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Reset Token</label>
-          <input
-            v-model="token"
-            type="text"
-            required
-            placeholder="Paste your reset token"
-            class="font-mono text-xs"
-          />
-        </div>
+        <input v-model="token" type="hidden" />
 
         <div>
           <label class="block text-sm text-gray-400 mb-1">New Password</label>

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import os
 from typing import Optional
 
+import resend
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
@@ -11,6 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.models import User
 from app.db import get_db  # you will create this (example below)
+
+resend.api_key = os.getenv("RESEND_API_KEY", "")
+APP_URL = os.getenv("APP_URL", "http://localhost:5173")
 
 router = APIRouter()
 
@@ -213,15 +217,32 @@ def update_me(
 def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:
-        # Return same response to prevent email enumeration
-        return {"message": "If that email is registered, a reset token has been generated."}
+        return {"message": "If that email is registered, you'll receive a reset link shortly."}
 
     token = create_reset_token(user.id)
-    # NOTE: In production, email this token to the user instead of returning it.
-    return {
-        "message": "Reset token generated. Check your email.",
-        "reset_token": token,
-    }
+    reset_url = f"{APP_URL}/reset-password?token={token}"
+
+    resend.Emails.send({
+        "from": "Frames <noreply@frames.inspiredreality.space>",
+        "to": [user.email],
+        "subject": "Reset your Frames password",
+        "html": f"""
+            <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+                <h2>Reset your password</h2>
+                <p>Click the button below to reset your Frames password. This link expires in 15 minutes.</p>
+                <a href="{reset_url}"
+                   style="display: inline-block; padding: 12px 24px; background: #6366f1;
+                          color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+                    Reset Password
+                </a>
+                <p style="color: #888; font-size: 12px;">
+                    If you didn't request this, you can safely ignore this email.
+                </p>
+            </div>
+        """,
+    })
+
+    return {"message": "If that email is registered, you'll receive a reset link shortly."}
 
 
 @router.post("/reset-password")
