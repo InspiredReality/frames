@@ -50,6 +50,22 @@ def get_optional_current_user(
         return None
 
 
+GUEST_USER_EMAIL = "guest@frames.internal"
+
+
+def get_guest_user(db: Session) -> User:
+    """Return the shared guest account, creating it on first call."""
+    import secrets as _secrets
+    guest = db.query(User).filter(User.email == GUEST_USER_EMAIL).first()
+    if not guest:
+        guest = User(email=GUEST_USER_EMAIL, username="guest")
+        guest.set_password(_secrets.token_hex(32))
+        db.add(guest)
+        db.commit()
+        db.refresh(guest)
+    return guest
+
+
 PASSWORD_RESET_EXPIRES_MINUTES = 15
 
 
