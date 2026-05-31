@@ -165,7 +165,8 @@ let arDragStartX = 0, arDragStartY = 0
 let arPanelStartX = 0, arPanelStartY = 0
 let compositeTimeout = null
 
-const ARRANGE_HEIGHT = 300 // px — fixed container height
+const ARRANGE_PAD = 8  // px padding inside container
+const arrangeContainerHeight = ref(300) // updated dynamically by initArrangement
 
 const goToStep = (n) => {
   if (n < step.value) step.value = n
@@ -188,26 +189,27 @@ const initArrangement = () => {
   const container = arrangeContainerRef.value
   if (!container || capturedImages.value.length < 2) return
 
-  const containerW = container.offsetWidth
   const photos = capturedImages.value
-  const DISPLAY_H = ARRANGE_HEIGHT * 0.78
+  const GAP = 6 // px gap between photos
 
-  const displayWidths = photos.map(img => DISPLAY_H * (img.width / img.height))
-  const totalW = displayWidths.reduce((s, w) => s + w, 0)
-  const overlapPerGap = photos.length > 1
-    ? Math.max(0, (totalW - containerW * 0.92) / (photos.length - 1))
-    : 0
+  // Compute display height so all photos fill the container width exactly
+  const innerW = container.offsetWidth - ARRANGE_PAD * 2 - GAP * (photos.length - 1)
+  const totalAspect = photos.reduce((sum, img) => sum + img.width / img.height, 0)
+  const DISPLAY_H = Math.floor(innerW / totalAspect)
 
-  let x = Math.max(4, (containerW - (totalW - overlapPerGap * (photos.length - 1))) / 2)
-  const y = (ARRANGE_HEIGHT - DISPLAY_H) / 2
+  let x = ARRANGE_PAD
+  const y = ARRANGE_PAD
 
   arrangePanels.value = photos.map((img, i) => {
-    const dw = displayWidths[i]
+    const dw = Math.floor(DISPLAY_H * (img.width / img.height))
     const panel = { id: i, dataUrl: img.dataUrl, imgW: img.width, imgH: img.height,
       x, y, displayW: dw, displayH: DISPLAY_H, zIndex: i + 1 }
-    x += dw - overlapPerGap
+    x += dw + GAP
     return panel
   })
+
+  // Container height = photo height + vertical padding
+  arrangeContainerHeight.value = DISPLAY_H + ARRANGE_PAD * 2
 
   nextTick(() => applyArrangement())
 }
@@ -253,7 +255,7 @@ const applyArrangement = async () => {
   const containerW = container.offsetWidth
   const SCALE = 3
   const outW = containerW * SCALE
-  const outH = ARRANGE_HEIGHT * SCALE
+  const outH = arrangeContainerHeight.value * SCALE
 
   const loadImg = (url) => new Promise(res => {
     const img = new Image(); img.onload = () => res(img); img.src = url
@@ -792,7 +794,7 @@ const saveWall = async () => {
         <div
           ref="arrangeContainerRef"
           class="relative overflow-hidden rounded-lg bg-gray-900"
-          :style="{ height: ARRANGE_HEIGHT + 'px', touchAction: 'none' }"
+          :style="{ height: arrangeContainerHeight + 'px', touchAction: 'none' }"
         >
           <img
             v-for="panel in arrangePanels"
