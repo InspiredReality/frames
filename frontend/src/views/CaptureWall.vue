@@ -447,7 +447,7 @@ const saveWall = async () => {
       </p>
 
       <!-- Camera view wrapper (panorama overlay is positioned relative to this) -->
-      <div class="relative wall-camera">
+      <div class="relative">
         <CameraCapture ref="cameraCaptureRef" :default-zoom="0.5" @capture="onCapture" @error="onCameraError" />
 
         <!-- Panorama overlays -->
@@ -788,9 +788,3 @@ const saveWall = async () => {
   </div>
 </template>
 
-<style scoped>
-/* Override the global 9/16 portrait ratio — walls are wide, use landscape */
-.wall-camera :deep(.camera-container) {
-  aspect-ratio: 16 / 9;
-}
-</style>
