@@ -17,9 +17,10 @@ const croppedImage = ref(null)
 const wallName = ref('')
 const wallDescription = ref('')
 const wallUnit = ref('ft') // 'ft' or 'cm'
-// Source of truth - always stored in cm
-const wallWidthCm = ref(0)
-const wallHeightCm = ref(0)
+// Source of truth - always stored in cm. Default 5 ft × 5 ft.
+const FT_5_IN_CM = 5 * 12 * 2.54 // 152.4
+const wallWidthCm = ref(FT_5_IN_CM)
+const wallHeightCm = ref(FT_5_IN_CM)
 const loading = ref(false)
 const error = ref('')
 const lockAspectRatio = ref(false)
@@ -110,12 +111,22 @@ const displayHeightCm = computed({
 const selectFtIn = () => { wallUnit.value = 'ft' }
 const selectCm = () => { wallUnit.value = 'cm' }
 
-// Aspect ratio of the original captured photo (used for optional lock)
+// Aspect ratio from wall dimensions — this is what the crop lock uses
+const wallDimensionAspectRatio = computed(() => {
+  if (wallWidthCm.value && wallHeightCm.value) {
+    return wallWidthCm.value / wallHeightCm.value
+  }
+  return null
+})
+
+// Fallback: photo's own pixel ratio if no wall dimensions entered
 const capturedAspectRatio = computed(() => {
   if (!capturedImage.value?.width || !capturedImage.value?.height) return null
   return capturedImage.value.width / capturedImage.value.height
 })
-const cropAspectRatio = computed(() => lockAspectRatio.value ? capturedAspectRatio.value : null)
+
+const activeLockRatio = computed(() => wallDimensionAspectRatio.value ?? capturedAspectRatio.value)
+const cropAspectRatio = computed(() => lockAspectRatio.value ? activeLockRatio.value : null)
 
 // Reset lock when going back to capture
 watch(step, (s) => { if (s === 1) lockAspectRatio.value = false })
@@ -292,7 +303,7 @@ const saveWall = async () => {
           />
           <label for="lockRatio" class="text-sm text-gray-300 cursor-pointer select-none">
             Lock aspect ratio
-            <span v-if="capturedAspectRatio" class="text-gray-500">({{ capturedAspectRatio.toFixed(2) }})</span>
+            <span v-if="activeLockRatio" class="text-gray-500">({{ activeLockRatio.toFixed(2) }})</span>
           </label>
         </div>
       </div>
