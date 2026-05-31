@@ -63,8 +63,8 @@ const getFrameDimensions = (picture) => {
     </div>
 
     <!-- Guest capture strip -->
-    <div class="flex items-center gap-3 mb-6 p-3 bg-dark-300 rounded-lg border border-gray-700">
-      <span class="text-sm text-gray-400 flex-shrink-0">Try it free — no account needed:</span>
+    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-6 p-3 bg-dark-300 rounded-lg border border-gray-700">
+      <span class="text-sm text-gray-400">Try it free — no account needed:</span>
       <div class="flex gap-2">
         <router-link to="/capture/wall" class="btn btn-secondary text-sm py-1.5 px-3">
           Capture Wall
