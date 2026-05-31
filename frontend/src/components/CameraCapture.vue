@@ -1,6 +1,13 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
+const props = defineProps({
+  defaultZoom: {
+    type: Number,
+    default: null
+  }
+})
+
 const emit = defineEmits(['capture', 'error'])
 
 const videoRef = ref(null)
@@ -10,6 +17,20 @@ const stream = ref(null)
 const isReady = ref(false)
 const facingMode = ref('environment') // 'user' or 'environment'
 let autoCaptureId = null
+
+const applyZoom = async (target) => {
+  if (target === null || !stream.value) return
+  try {
+    const track = stream.value.getVideoTracks()[0]
+    if (!track || typeof track.getCapabilities !== 'function') return
+    const caps = track.getCapabilities()
+    if (!caps?.zoom) return
+    const clamped = Math.max(caps.zoom.min, Math.min(caps.zoom.max, target))
+    await track.applyConstraints({ advanced: [{ zoom: clamped }] })
+  } catch {
+    // zoom not supported on this device/browser — silently ignore
+  }
+}
 
 const startCamera = async () => {
   try {
@@ -29,6 +50,7 @@ const startCamera = async () => {
       videoRef.value.srcObject = stream.value
       await videoRef.value.play()
       isReady.value = true
+      await applyZoom(props.defaultZoom)
     }
   } catch (error) {
     console.error('Camera access error:', error)
