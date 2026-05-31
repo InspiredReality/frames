@@ -47,17 +47,30 @@ const getFrameDimensions = (picture) => {
 
 <template>
   <div class="max-w-5xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-start justify-between mb-4 gap-4">
       <div>
         <h1 class="text-2xl font-bold">Public Gallery</h1>
         <p class="text-gray-400 text-sm">Walls and frames shared by the community</p>
       </div>
-      <div class="flex gap-3">
-        <router-link to="/register" class="btn btn-primary">
+      <div class="flex gap-2 flex-shrink-0">
+        <router-link to="/register" class="btn btn-primary text-sm">
           Create Account
         </router-link>
-        <router-link to="/login" class="btn btn-secondary">
+        <router-link to="/login" class="btn btn-secondary text-sm">
           Sign In
+        </router-link>
+      </div>
+    </div>
+
+    <!-- Guest capture strip -->
+    <div class="flex items-center gap-3 mb-6 p-3 bg-dark-300 rounded-lg border border-gray-700">
+      <span class="text-sm text-gray-400 flex-shrink-0">Try it free — no account needed:</span>
+      <div class="flex gap-2">
+        <router-link to="/capture/wall" class="btn btn-secondary text-sm py-1.5 px-3">
+          Capture Wall
+        </router-link>
+        <router-link to="/capture/frame" class="btn btn-secondary text-sm py-1.5 px-3">
+          Capture Frame
         </router-link>
       </div>
     </div>
