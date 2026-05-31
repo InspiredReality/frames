@@ -9,6 +9,7 @@ const fileInputRef = ref(null)
 const stream = ref(null)
 const isReady = ref(false)
 const facingMode = ref('environment') // 'user' or 'environment'
+let autoCaptureId = null
 
 const startCamera = async () => {
   try {
@@ -75,7 +76,6 @@ const handleFileUpload = (event) => {
   reader.onload = (e) => {
     const img = new Image()
     img.onload = () => {
-      // Create a canvas to get the blob
       const canvas = canvasRef.value
       const ctx = canvas.getContext('2d')
       canvas.width = img.width
@@ -97,8 +97,21 @@ const handleFileUpload = (event) => {
   }
   reader.readAsDataURL(file)
 
-  // Reset input so the same file can be selected again
   event.target.value = ''
+}
+
+const startAutoCapture = (intervalMs = 800) => {
+  stopAutoCapture()
+  autoCaptureId = setInterval(() => {
+    if (isReady.value) capturePhoto()
+  }, intervalMs)
+}
+
+const stopAutoCapture = () => {
+  if (autoCaptureId !== null) {
+    clearInterval(autoCaptureId)
+    autoCaptureId = null
+  }
 }
 
 onMounted(() => {
@@ -109,9 +122,10 @@ onUnmounted(() => {
   if (stream.value) {
     stream.value.getTracks().forEach(track => track.stop())
   }
+  stopAutoCapture()
 })
 
-defineExpose({ capturePhoto, switchCamera, triggerUpload })
+defineExpose({ capturePhoto, switchCamera, triggerUpload, startAutoCapture, stopAutoCapture })
 </script>
 
 <template>
