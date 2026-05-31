@@ -167,6 +167,7 @@ let compositeTimeout = null
 
 const ARRANGE_PAD = 8  // px padding inside container
 const arrangeContainerHeight = ref(300) // updated dynamically by initArrangement
+const arrangeCanvasWidth = ref(0)       // total inner canvas width (may exceed viewport)
 
 const goToStep = (n) => {
   if (n < step.value) step.value = n
@@ -192,24 +193,24 @@ const initArrangement = () => {
   const photos = capturedImages.value
   const GAP = 6 // px gap between photos
 
-  // Compute display height so all photos fill the container width exactly
-  const innerW = container.offsetWidth - ARRANGE_PAD * 2 - GAP * (photos.length - 1)
-  const totalAspect = photos.reduce((sum, img) => sum + img.width / img.height, 0)
-  const DISPLAY_H = Math.floor(innerW / totalAspect)
+  // Height = at least 75% of screen height so photos are large enough to interact with
+  const DISPLAY_H = Math.max(Math.floor(window.innerHeight * 0.75) - ARRANGE_PAD * 2, 200)
 
   let x = ARRANGE_PAD
   const y = ARRANGE_PAD
+  let totalW = ARRANGE_PAD * 2 + GAP * (photos.length - 1)
 
   arrangePanels.value = photos.map((img, i) => {
     const dw = Math.floor(DISPLAY_H * (img.width / img.height))
     const panel = { id: i, dataUrl: img.dataUrl, imgW: img.width, imgH: img.height,
       x, y, displayW: dw, displayH: DISPLAY_H, zIndex: i + 1 }
     x += dw + GAP
+    totalW += dw
     return panel
   })
 
-  // Container height = photo height + vertical padding
   arrangeContainerHeight.value = DISPLAY_H + ARRANGE_PAD * 2
+  arrangeCanvasWidth.value = totalW
 
   nextTick(() => applyArrangement())
 }
@@ -252,9 +253,8 @@ const applyArrangement = async () => {
   if (!container || !arrangePanels.value.length) return
   compositing.value = true
 
-  const containerW = container.offsetWidth
   const SCALE = 3
-  const outW = containerW * SCALE
+  const outW = arrangeCanvasWidth.value * SCALE
   const outH = arrangeContainerHeight.value * SCALE
 
   const loadImg = (url) => new Promise(res => {
@@ -793,30 +793,35 @@ const saveWall = async () => {
 
         <div
           ref="arrangeContainerRef"
-          class="relative overflow-hidden rounded-lg bg-gray-900"
-          :style="{ height: arrangeContainerHeight + 'px', touchAction: 'none' }"
+          class="overflow-x-auto overflow-y-hidden rounded-lg bg-gray-900"
+          :style="{ height: arrangeContainerHeight + 'px' }"
         >
-          <img
-            v-for="panel in arrangePanels"
-            :key="panel.id"
-            :src="panel.dataUrl"
-            draggable="false"
-            class="absolute select-none rounded shadow-lg cursor-move"
-            :style="{
-              left: panel.x + 'px',
-              top: panel.y + 'px',
-              width: panel.displayW + 'px',
-              height: panel.displayH + 'px',
-              zIndex: panel.zIndex,
-              outline: activePanelId === panel.id ? '2px solid #818cf8' : '2px solid transparent',
-              touchAction: 'none',
-              userSelect: 'none'
-            }"
-            @pointerdown.prevent="onArrangeDown($event, panel)"
-          />
-          <!-- Compositing spinner -->
-          <div v-if="compositing" class="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-            <div class="w-6 h-6 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
+          <div
+            class="relative"
+            :style="{ width: arrangeCanvasWidth + 'px', height: '100%', touchAction: 'none' }"
+          >
+            <img
+              v-for="panel in arrangePanels"
+              :key="panel.id"
+              :src="panel.dataUrl"
+              draggable="false"
+              class="absolute select-none rounded shadow-lg cursor-move"
+              :style="{
+                left: panel.x + 'px',
+                top: panel.y + 'px',
+                width: panel.displayW + 'px',
+                height: panel.displayH + 'px',
+                zIndex: panel.zIndex,
+                outline: activePanelId === panel.id ? '2px solid #818cf8' : '2px solid transparent',
+                touchAction: 'none',
+                userSelect: 'none'
+              }"
+              @pointerdown.prevent="onArrangeDown($event, panel)"
+            />
+            <!-- Compositing spinner -->
+            <div v-if="compositing" class="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+              <div class="w-6 h-6 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
+            </div>
           </div>
         </div>
 
