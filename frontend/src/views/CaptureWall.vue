@@ -171,7 +171,7 @@ const goToStep = (n) => {
   if (n < step.value) step.value = n
 }
 
-
+const goToArrangeStep = () => {
   if (!capturedImages.value.length) return
   if (capturedImages.value.length === 1) {
     capturedImage.value = capturedImages.value[0]
