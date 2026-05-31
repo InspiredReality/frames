@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
@@ -128,8 +128,13 @@ const capturedAspectRatio = computed(() => {
 const activeLockRatio = computed(() => wallDimensionAspectRatio.value ?? capturedAspectRatio.value)
 const cropAspectRatio = computed(() => lockAspectRatio.value ? activeLockRatio.value : null)
 
-// Reset lock when going back to capture
-watch(step, (s) => { if (s === 1) lockAspectRatio.value = false })
+// Reset lock when going back to capture; init arrangement when entering step 2 with multi photos
+watch(step, (s) => {
+  if (s === 1) lockAspectRatio.value = false
+  if (s === 2 && captureMode.value === 'multi' && capturedImages.value.length > 1) {
+    nextTick(() => initArrangement())
+  }
+})
 
 // Get values in cm for saving (source of truth)
 const getWidthInCm = () => wallWidthCm.value || null
@@ -148,6 +153,131 @@ const multiFileInputRef = ref(null)
 const MAX_MULTI = 10
 const MAX_PANORAMA = 15
 let guideIntervalId = null
+
+// ── Photo arrangement (step 2, multi mode) ─────────────────────
+const arrangeContainerRef = ref(null)
+const arrangePanels = ref([])   // { id, dataUrl, imgW, imgH, x, y, displayW, displayH, zIndex }
+const activePanelId = ref(null)
+const compositing = ref(false)
+const cropKey = ref(0)          // incremented after each composite to reset ImageCropper
+let arDragging = null
+let arDragStartX = 0, arDragStartY = 0
+let arPanelStartX = 0, arPanelStartY = 0
+let compositeTimeout = null
+
+const ARRANGE_HEIGHT = 300 // px — fixed container height
+
+const goToArrangeStep = () => {
+  if (!capturedImages.value.length) return
+  if (capturedImages.value.length === 1) {
+    capturedImage.value = capturedImages.value[0]
+    croppedImage.value = capturedImages.value[0]
+  } else {
+    capturedImage.value = null
+    croppedImage.value = null
+  }
+  useBlankColor.value = false
+  step.value = 2
+}
+
+const initArrangement = () => {
+  const container = arrangeContainerRef.value
+  if (!container || capturedImages.value.length < 2) return
+
+  const containerW = container.offsetWidth
+  const photos = capturedImages.value
+  const DISPLAY_H = ARRANGE_HEIGHT * 0.78
+
+  const displayWidths = photos.map(img => DISPLAY_H * (img.width / img.height))
+  const totalW = displayWidths.reduce((s, w) => s + w, 0)
+  const overlapPerGap = photos.length > 1
+    ? Math.max(0, (totalW - containerW * 0.92) / (photos.length - 1))
+    : 0
+
+  let x = Math.max(4, (containerW - (totalW - overlapPerGap * (photos.length - 1))) / 2)
+  const y = (ARRANGE_HEIGHT - DISPLAY_H) / 2
+
+  arrangePanels.value = photos.map((img, i) => {
+    const dw = displayWidths[i]
+    const panel = { id: i, dataUrl: img.dataUrl, imgW: img.width, imgH: img.height,
+      x, y, displayW: dw, displayH: DISPLAY_H, zIndex: i + 1 }
+    x += dw - overlapPerGap
+    return panel
+  })
+
+  nextTick(() => applyArrangement())
+}
+
+const onArrangeDown = (e, panel) => {
+  e.preventDefault()
+  arDragging = panel
+  arDragStartX = e.clientX
+  arDragStartY = e.clientY
+  arPanelStartX = panel.x
+  arPanelStartY = panel.y
+  activePanelId.value = panel.id
+  // Last-touched comes to front
+  const maxZ = Math.max(...arrangePanels.value.map(p => p.zIndex))
+  if (panel.zIndex <= maxZ) panel.zIndex = maxZ + 1
+  document.addEventListener('pointermove', onArrangeMove)
+  document.addEventListener('pointerup', onArrangeUp)
+}
+
+const onArrangeMove = (e) => {
+  if (!arDragging) return
+  arDragging.x = arPanelStartX + (e.clientX - arDragStartX)
+  arDragging.y = arPanelStartY + (e.clientY - arDragStartY)
+}
+
+const onArrangeUp = () => {
+  arDragging = null
+  document.removeEventListener('pointermove', onArrangeMove)
+  document.removeEventListener('pointerup', onArrangeUp)
+  clearTimeout(compositeTimeout)
+  compositeTimeout = setTimeout(applyArrangement, 300)
+}
+
+const resetArrangement = () => {
+  nextTick(() => initArrangement())
+}
+
+const applyArrangement = async () => {
+  const container = arrangeContainerRef.value
+  if (!container || !arrangePanels.value.length) return
+  compositing.value = true
+
+  const containerW = container.offsetWidth
+  const SCALE = 3
+  const outW = containerW * SCALE
+  const outH = ARRANGE_HEIGHT * SCALE
+
+  const loadImg = (url) => new Promise(res => {
+    const img = new Image(); img.onload = () => res(img); img.src = url
+  })
+
+  const sorted = [...arrangePanels.value].sort((a, b) => a.zIndex - b.zIndex)
+  const imgs = await Promise.all(sorted.map(p => loadImg(p.dataUrl)))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = outW; canvas.height = outH
+  const ctx = canvas.getContext('2d')
+
+  imgs.forEach((img, i) => {
+    const p = sorted[i]
+    ctx.drawImage(img, p.x * SCALE, p.y * SCALE, p.displayW * SCALE, p.displayH * SCALE)
+  })
+
+  return new Promise(res => {
+    canvas.toBlob(blob => {
+      const result = { blob, dataUrl: canvas.toDataURL('image/jpeg', 0.9), width: outW, height: outH }
+      capturedImage.value = result
+      croppedImage.value = result
+      cropKey.value++
+      compositing.value = false
+      res(result)
+    }, 'image/jpeg', 0.9)
+  })
+}
 
 const setMode = (mode) => {
   if (isPanoramaRecording.value) stopPanorama()
@@ -304,6 +434,9 @@ const proceedWithStitching = async (frames, useOverlap = false) => {
 
 onUnmounted(() => {
   if (isPanoramaRecording.value) stopPanorama()
+  clearTimeout(compositeTimeout)
+  document.removeEventListener('pointermove', onArrangeMove)
+  document.removeEventListener('pointerup', onArrangeUp)
 })
 
 // ── Event handlers ─────────────────────────────────────────────
@@ -349,6 +482,9 @@ const retake = () => {
   panoramaFrames.value = []
   if (isPanoramaRecording.value) stopPanorama()
   panoramaProgress.value = 0
+  arrangePanels.value = []
+  activePanelId.value = null
+  clearTimeout(compositeTimeout)
 }
 
 const saveWall = async () => {
@@ -605,11 +741,10 @@ const saveWall = async () => {
 
         <button
           v-if="capturedImages.length >= 1"
-          @click="proceedWithStitching(capturedImages, false)"
-          :disabled="stitching"
+          @click="goToArrangeStep"
           class="btn btn-primary w-full"
         >
-          {{ stitching ? 'Combining…' : capturedImages.length === 1 ? 'Continue →' : `Combine ${capturedImages.length} Photos & Continue →` }}
+          {{ capturedImages.length === 1 ? 'Continue →' : `Arrange ${capturedImages.length} Photos →` }}
         </button>
         <p v-else class="text-xs text-center text-gray-500">
           Tap the shutter or upload photos — each one is added to the row above
@@ -641,9 +776,49 @@ const saveWall = async () => {
         {{ useBlankColor ? 'Choose wall color and enter dimensions' : 'Crop your wall photo and enter dimensions' }}
       </p>
 
+      <!-- ── Arrange Photos (multi mode, 2+ images) ──────────────── -->
+      <div v-if="captureMode === 'multi' && capturedImages.length > 1 && !useBlankColor" class="card mb-4">
+        <h3 class="font-semibold mb-1">Arrange Photos</h3>
+        <p class="text-xs text-gray-400 mb-3">Drag to reposition · tap to bring to front</p>
+
+        <div
+          ref="arrangeContainerRef"
+          class="relative overflow-hidden rounded-lg bg-gray-900"
+          :style="{ height: ARRANGE_HEIGHT + 'px', touchAction: 'none' }"
+        >
+          <img
+            v-for="panel in arrangePanels"
+            :key="panel.id"
+            :src="panel.dataUrl"
+            draggable="false"
+            class="absolute select-none rounded shadow-lg cursor-move"
+            :style="{
+              left: panel.x + 'px',
+              top: panel.y + 'px',
+              width: panel.displayW + 'px',
+              height: panel.displayH + 'px',
+              zIndex: panel.zIndex,
+              outline: activePanelId === panel.id ? '2px solid #818cf8' : '2px solid transparent',
+              touchAction: 'none',
+              userSelect: 'none'
+            }"
+            @pointerdown.prevent="onArrangeDown($event, panel)"
+          />
+          <!-- Compositing spinner -->
+          <div v-if="compositing" class="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+            <div class="w-6 h-6 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </div>
+
+        <button @click="resetArrangement" class="btn btn-secondary w-full mt-3 text-sm">
+          Reset Positions
+        </button>
+      </div>
+
       <!-- Photo cropping -->
       <div v-if="!useBlankColor && capturedImage" class="card mb-4">
         <ImageCropper
+          :key="cropKey"
           :imageUrl="capturedImage.dataUrl"
           :aspectRatio="cropAspectRatio"
           @crop="onCrop"
