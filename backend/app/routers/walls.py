@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.settings import settings
 from app.db import get_db
 from app.models import Wall, User
-from app.routers.auth import get_current_user, get_optional_current_user
+from app.routers.auth import get_current_user, get_optional_current_user, get_guest_user
 from app.services.image_processor import process_wall_image
 
 router = APIRouter()
@@ -115,8 +115,12 @@ async def create_wall(
     image: Optional[UploadFile] = File(None),
 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
+    is_guest = current_user is None
+    if is_guest:
+        current_user = get_guest_user(db)
+
     upload_folder = Path(settings.UPLOAD_FOLDER) / "walls"
     upload_folder.mkdir(parents=True, exist_ok=True)
 
@@ -181,6 +185,7 @@ async def create_wall(
         background_color=background_color,
         width_cm=width_cm,
         height_cm=height_cm,
+        is_private=False if is_guest else True,
         scene_config={},
         frame_placements=[],
     )

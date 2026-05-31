@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.settings import settings
 from app.db import get_db
 from app.models import Picture, PictureFrame, User
-from app.routers.auth import get_current_user, get_optional_current_user
+from app.routers.auth import get_current_user, get_optional_current_user, get_guest_user
 from app.services.image_processor import process_picture_image
 from app.services.model_generator import generate_frame_model
 from app.utils.uploads import make_safe_filename, save_upload_with_limit, verify_image_file
@@ -127,8 +127,12 @@ async def create_picture(
     image: UploadFile = File(...),
 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
+    is_guest = current_user is None
+    if is_guest:
+        current_user = get_guest_user(db)
+
     # Validate file presence
     if not image.filename:
         raise HTTPException(status_code=400, detail="No file selected")
@@ -160,6 +164,7 @@ async def create_picture(
             thumbnail_path=thumb_rel,
             width_px=result.get("width"),
             height_px=result.get("height"),
+            is_private=False if is_guest else True,
         )
 
         db.add(picture)

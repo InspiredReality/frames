@@ -5,9 +5,11 @@ import CameraCapture from '@/components/CameraCapture.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import QrCodeCard from '@/components/QrCodeCard.vue'
 import { useWallsStore } from '@/store/walls'
+import { useAuthStore } from '@/store/auth'
 
 const router = useRouter()
 const wallsStore = useWallsStore()
+const authStore = useAuthStore()
 
 const step = ref(1) // 1: capture/choose, 2: crop, 3: details
 const capturedImage = ref(null)
@@ -184,7 +186,7 @@ const saveWall = async () => {
       height_cm: getHeightInCm()
     }, bgColor)
 
-    router.push('/gallery')
+    router.push(authStore.isAuthenticated ? '/gallery' : '/public-gallery')
   } catch (err) {
     error.value = err.response?.data?.error || 'Failed to save wall'
   } finally {
@@ -195,6 +197,17 @@ const saveWall = async () => {
 
 <template>
   <div class="max-w-2xl mx-auto">
+    <!-- Guest notice -->
+    <div v-if="!authStore.isAuthenticated" class="mb-4 p-3 bg-primary-900/40 border border-primary-600 rounded-lg text-sm text-primary-300 flex items-start gap-2">
+      <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>
+        You're capturing as a guest — this wall will be <strong>public</strong>.
+        <router-link to="/register" class="underline hover:text-white">Create an account</router-link> to keep your captures private.
+      </span>
+    </div>
+
     <!-- Step indicator -->
     <div class="flex items-center justify-center mb-8">
       <div
