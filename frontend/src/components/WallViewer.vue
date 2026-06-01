@@ -395,12 +395,16 @@ const updateFrames = () => {
     const pictureHeight = frameHeight - borderWidth * 2
     const pictureGeometry = new THREE.PlaneGeometry(pictureWidth, pictureHeight)
 
-    // Load the image texture - use same synchronous pattern as wall texture
-    const imageUrl = frame.pictureImage ? getUploadUrl(frame.pictureImage) : null
+    const imageUrl = frame.pictureImage
+      ? (frame.pictureImage.startsWith('data:') || frame.pictureImage.startsWith('blob:')
+          ? frame.pictureImage
+          : getUploadUrl(frame.pictureImage))
+      : null
     let pictureMaterial
 
     if (imageUrl) {
-      const texture = textureLoader.load(imageUrl)
+      const loader = new THREE.TextureLoader()
+      const texture = loader.load(imageUrl)
       texture.colorSpace = THREE.SRGBColorSpace
       pictureMaterial = new THREE.MeshStandardMaterial({
         map: texture,
@@ -537,5 +541,5 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="viewer-container w-full h-96 rounded-lg overflow-hidden"></div>
+  <div ref="containerRef" class="viewer-container w-full h-full rounded-lg overflow-hidden"></div>
 </template>

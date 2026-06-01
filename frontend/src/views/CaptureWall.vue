@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import CameraCapture from '@/components/CameraCapture.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import QrCodeCard from '@/components/QrCodeCard.vue'
+import WallViewer from '@/components/WallViewer.vue'
 import { useWallsStore } from '@/store/walls'
 import { useAuthStore } from '@/store/auth'
 
@@ -132,7 +133,7 @@ const cropAspectRatio = computed(() => lockAspectRatio.value ? activeLockRatio.v
 watch(step, (s) => {
   if (s === 1) lockAspectRatio.value = false
   if (s === 2 && captureMode.value === 'multi' && capturedImages.value.length > 1) {
-    nextTick(() => initArrangement())
+    nextTick(() => initWallArrangement())
   }
 })
 
@@ -155,19 +156,13 @@ const MAX_PANORAMA = 15
 let guideIntervalId = null
 
 // ── Photo arrangement (step 2, multi mode) ─────────────────────
-const arrangeContainerRef = ref(null)
-const arrangePanels = ref([])   // { id, dataUrl, imgW, imgH, x, y, displayW, displayH, zIndex }
-const activePanelId = ref(null)
+const wallViewerRef = ref(null)
+const arrangeFrames = ref([])     // synthetic frame objects passed to WallViewer
+const arrangePlacements = ref([]) // initial positions passed to WallViewer
 const compositing = ref(false)
-const cropKey = ref(0)          // incremented after each composite to reset ImageCropper
-let arDragging = null
-let arDragStartX = 0, arDragStartY = 0
-let arPanelStartX = 0, arPanelStartY = 0
+const cropKey = ref(0)            // incremented after each composite to reset ImageCropper
 let compositeTimeout = null
-
-const ARRANGE_PAD = 8  // px padding inside container
-const arrangeContainerHeight = ref(300) // updated dynamically by initArrangement
-const arrangeCanvasWidth = ref(0)       // total inner canvas width (may exceed viewport)
+let localPositions = new Map()    // frame_id → updated { x, y } from drag (not reactive)
 
 const goToStep = (n) => {
   if (n < step.value) step.value = n
@@ -186,92 +181,81 @@ const goToArrangeStep = () => {
   step.value = 2
 }
 
-const initArrangement = () => {
-  const container = arrangeContainerRef.value
-  if (!container || capturedImages.value.length < 2) return
-
+const initWallArrangement = () => {
+  localPositions.clear()
   const photos = capturedImages.value
-  const GAP = 6 // px gap between photos
+  if (!photos.length) return
 
-  // Height = at least 75% of screen height so photos are large enough to interact with
-  const DISPLAY_H = Math.max(Math.floor(window.innerHeight * 0.75) - ARRANGE_PAD * 2, 200)
+  const wallW = wallWidthCm.value || 200
+  const wallH = wallHeightCm.value || 200
 
-  let x = ARRANGE_PAD
-  const y = ARRANGE_PAD
-  let totalW = ARRANGE_PAD * 2 + GAP * (photos.length - 1)
+  // Distribute photo widths proportionally to their pixel aspect ratios
+  const totalAspect = photos.reduce((s, p) => s + p.width / p.height, 0)
+  let xCm = -wallW / 2
 
-  arrangePanels.value = photos.map((img, i) => {
-    const dw = Math.floor(DISPLAY_H * (img.width / img.height))
-    const panel = { id: i, dataUrl: img.dataUrl, imgW: img.width, imgH: img.height,
-      x, y, displayW: dw, displayH: DISPLAY_H, zIndex: i + 1 }
-    x += dw + GAP
-    totalW += dw
-    return panel
+  arrangeFrames.value = photos.map((photo, i) => {
+    const frameCmW = wallW * ((photo.width / photo.height) / totalAspect)
+    return {
+      id: `photo_${i}`,
+      dimensions: { cm: { width: frameCmW, height: wallH, depth: 0.5 } },
+      styling: { frame_color: '#555555' },
+      pictureImage: photo.dataUrl
+    }
   })
 
-  arrangeContainerHeight.value = DISPLAY_H + ARRANGE_PAD * 2
-  arrangeCanvasWidth.value = totalW
+  arrangePlacements.value = photos.map((_, i) => {
+    const frameCmW = arrangeFrames.value[i].dimensions.cm.width
+    const cx = xCm + frameCmW / 2
+    xCm += frameCmW
+    return { frame_id: `photo_${i}`, position: { x: cx * 0.01, y: 0 }, visible: true }
+  })
 
-  nextTick(() => applyArrangement())
+  nextTick(() => applyWallArrangement())
 }
 
-const onArrangeDown = (e, panel) => {
-  e.preventDefault()
-  arDragging = panel
-  arDragStartX = e.clientX
-  arDragStartY = e.clientY
-  arPanelStartX = panel.x
-  arPanelStartY = panel.y
-  activePanelId.value = panel.id
-  // Last-touched comes to front
-  const maxZ = Math.max(...arrangePanels.value.map(p => p.zIndex))
-  if (panel.zIndex <= maxZ) panel.zIndex = maxZ + 1
-  document.addEventListener('pointermove', onArrangeMove)
-  document.addEventListener('pointerup', onArrangeUp)
-}
-
-const onArrangeMove = (e) => {
-  if (!arDragging) return
-  arDragging.x = arPanelStartX + (e.clientX - arDragStartX)
-  arDragging.y = arPanelStartY + (e.clientY - arDragStartY)
-}
-
-const onArrangeUp = () => {
-  arDragging = null
-  document.removeEventListener('pointermove', onArrangeMove)
-  document.removeEventListener('pointerup', onArrangeUp)
+const onWallFrameMoved = ({ placementIndex, position }) => {
+  const placement = arrangePlacements.value[placementIndex]
+  if (!placement) return
+  localPositions.set(placement.frame_id, position)
   clearTimeout(compositeTimeout)
-  compositeTimeout = setTimeout(applyArrangement, 300)
+  compositeTimeout = setTimeout(applyWallArrangement, 600)
 }
 
-const resetArrangement = () => {
-  nextTick(() => initArrangement())
+const resetWallArrangement = () => {
+  initWallArrangement()
 }
 
-const applyArrangement = async () => {
-  const container = arrangeContainerRef.value
-  if (!container || !arrangePanels.value.length) return
+const applyWallArrangement = async () => {
+  if (!arrangePlacements.value.length || !arrangeFrames.value.length) return
   compositing.value = true
 
-  const SCALE = 3
-  const outW = arrangeCanvasWidth.value * SCALE
-  const outH = arrangeContainerHeight.value * SCALE
+  const wallW = wallWidthCm.value || 200
+  const wallH = wallHeightCm.value || 200
+  const sceneW = wallW * 0.01
+  const sceneH = wallH * 0.01
+  const pxPerCm = Math.min(10, 4000 / Math.max(wallW, 1))
+  const outW = Math.max(1, Math.round(wallW * pxPerCm))
+  const outH = Math.max(1, Math.round(wallH * pxPerCm))
 
   const loadImg = (url) => new Promise(res => {
     const img = new Image(); img.onload = () => res(img); img.src = url
   })
 
-  const sorted = [...arrangePanels.value].sort((a, b) => a.zIndex - b.zIndex)
-  const imgs = await Promise.all(sorted.map(p => loadImg(p.dataUrl)))
-
   const canvas = document.createElement('canvas')
   canvas.width = outW; canvas.height = outH
   const ctx = canvas.getContext('2d')
 
-  imgs.forEach((img, i) => {
-    const p = sorted[i]
-    ctx.drawImage(img, p.x * SCALE, p.y * SCALE, p.displayW * SCALE, p.displayH * SCALE)
-  })
+  for (const placement of arrangePlacements.value) {
+    const frame = arrangeFrames.value.find(f => f.id === placement.frame_id)
+    if (!frame || placement.visible === false) continue
+    const pos = localPositions.get(placement.frame_id) ?? placement.position
+    const img = await loadImg(frame.pictureImage)
+    const frameW = frame.dimensions.cm.width
+    const frameH = frame.dimensions.cm.height
+    const px = (pos.x / sceneW + 0.5) * outW
+    const py = (-pos.y / sceneH + 0.5) * outH
+    ctx.drawImage(img, px - (frameW * pxPerCm) / 2, py - (frameH * pxPerCm) / 2, frameW * pxPerCm, frameH * pxPerCm)
+  }
 
   return new Promise(res => {
     canvas.toBlob(blob => {
@@ -789,43 +773,24 @@ const saveWall = async () => {
       <!-- ── Arrange Photos (multi mode, 2+ images) ──────────────── -->
       <div v-if="captureMode === 'multi' && capturedImages.length > 1 && !useBlankColor" class="card mb-4">
         <h3 class="font-semibold mb-1">Arrange Photos</h3>
-        <p class="text-xs text-gray-400 mb-3">Drag to reposition · tap to bring to front</p>
+        <p class="text-xs text-gray-400 mb-2">Drag photos to overlap or reposition · right-click + drag to rotate view</p>
 
-        <div
-          ref="arrangeContainerRef"
-          class="overflow-x-auto overflow-y-hidden rounded-lg bg-gray-900"
-          :style="{ height: arrangeContainerHeight + 'px' }"
-        >
-          <div
-            class="relative"
-            :style="{ width: arrangeCanvasWidth + 'px', height: '100%', touchAction: 'none' }"
-          >
-            <img
-              v-for="panel in arrangePanels"
-              :key="panel.id"
-              :src="panel.dataUrl"
-              draggable="false"
-              class="absolute select-none rounded shadow-lg cursor-move"
-              :style="{
-                left: panel.x + 'px',
-                top: panel.y + 'px',
-                width: panel.displayW + 'px',
-                height: panel.displayH + 'px',
-                zIndex: panel.zIndex,
-                outline: activePanelId === panel.id ? '2px solid #818cf8' : '2px solid transparent',
-                touchAction: 'none',
-                userSelect: 'none'
-              }"
-              @pointerdown.prevent="onArrangeDown($event, panel)"
-            />
-            <!-- Compositing spinner -->
-            <div v-if="compositing" class="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-              <div class="w-6 h-6 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          </div>
+        <div class="h-[70vh]">
+          <WallViewer
+            ref="wallViewerRef"
+            :wallWidthCm="wallWidthCm"
+            :wallHeightCm="wallHeightCm"
+            :framePlacements="arrangePlacements"
+            :frames="arrangeFrames"
+            @frameMoved="onWallFrameMoved"
+          />
         </div>
 
-        <button @click="resetArrangement" class="btn btn-secondary w-full mt-3 text-sm">
+        <div v-if="compositing" class="flex justify-center py-2">
+          <div class="w-5 h-5 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+
+        <button @click="resetWallArrangement" class="btn btn-secondary w-full mt-3 text-sm">
           Reset Positions
         </button>
       </div>

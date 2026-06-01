@@ -774,16 +774,18 @@ const getFrameDimensions = (frame) => {
 
       <!-- 3D Wall Viewer -->
       <div class="card mb-6">
-        <WallViewer
-          ref="wallViewerRef"
-          :wallImageUrl="getImageUrl(wall.image_path)"
-          :wallWidthCm="wall.width_cm || 0"
-          :wallHeightCm="wall.height_cm || 0"
-          :framePlacements="wall.frame_placements || []"
-          :frames="allFrames"
-          @frameSelected="selectFrame"
-          @frameMoved="onFrameMoved"
-        />
+        <div class="h-96">
+          <WallViewer
+            ref="wallViewerRef"
+            :wallImageUrl="getImageUrl(wall.image_path)"
+            :wallWidthCm="wall.width_cm || 0"
+            :wallHeightCm="wall.height_cm || 0"
+            :framePlacements="wall.frame_placements || []"
+            :frames="allFrames"
+            @frameSelected="selectFrame"
+            @frameMoved="onFrameMoved"
+          />
+        </div>
         <p class="text-xs text-gray-500 mt-2 text-center">Left-click and drag frames to move them. Right-click and drag to rotate the view.</p>
         <div class="mt-3 flex justify-center">
           <button

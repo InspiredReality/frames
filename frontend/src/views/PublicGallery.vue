@@ -3,16 +3,19 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
+import { useAuthStore } from '@/store/auth'
 import { getUploadUrl } from '@/services/api'
 import FramePreview2D from '@/components/FramePreview2D.vue'
 
 const router = useRouter()
 const wallsStore = useWallsStore()
 const picturesStore = usePicturesStore()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const activeTab = ref('all') // 'all', 'walls', 'frames'
 const selectedFrame = ref(null)
+const selectedWall = ref(null)
 
 onMounted(async () => {
   try {
@@ -32,6 +35,14 @@ const filteredItems = computed(() => {
 })
 
 const getImageUrl = (path) => getUploadUrl(path)
+
+const navigateToWall = (wall) => {
+  if (authStore.isAuthenticated) {
+    router.push(`/wall/${wall.id}`)
+  } else {
+    selectedWall.value = wall
+  }
+}
 
 const getFrameDimensions = (picture) => {
   const frame = picture.frames?.[0]
@@ -120,7 +131,8 @@ const getFrameDimensions = (picture) => {
           <div
             v-for="wall in filteredItems.walls"
             :key="wall.id"
-            class="card p-3 border border-transparent hover:border-primary-500/50 transition-colors"
+            @click="navigateToWall(wall)"
+            class="card p-3 border border-transparent hover:border-primary-500/50 transition-colors cursor-pointer"
           >
             <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-3">
               <img
@@ -190,6 +202,37 @@ const getFrameDimensions = (picture) => {
         </div>
         <router-link to="/register" class="btn btn-primary w-full text-center block">
           Create Account to Use This Frame
+        </router-link>
+      </div>
+    </div>
+
+    <!-- Wall preview modal (guest users) -->
+    <div
+      v-if="selectedWall"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+      @click.self="selectedWall = null"
+    >
+      <div class="card max-w-lg w-full">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold">{{ selectedWall.name }}</h2>
+          <button @click="selectedWall = null" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-4">
+          <img
+            :src="getImageUrl(selectedWall.thumbnail_path || selectedWall.image_path)"
+            :alt="selectedWall.name"
+            class="w-full h-full object-cover"
+          />
+        </div>
+        <p class="text-sm text-gray-400 mb-4">
+          {{ selectedWall.frame_placements?.length || 0 }} frame(s) placed
+        </p>
+        <router-link to="/register" class="btn btn-primary w-full text-center block">
+          Create Account to Edit This Wall
         </router-link>
       </div>
     </div>
