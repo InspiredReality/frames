@@ -157,12 +157,15 @@ let guideIntervalId = null
 
 // ── Photo arrangement (step 2, multi mode) ─────────────────────
 const wallViewerRef = ref(null)
-const arrangeFrames = ref([])     // synthetic frame objects passed to WallViewer
-const arrangePlacements = ref([]) // initial positions passed to WallViewer
+const arrangeFrames = ref([])       // synthetic frame objects passed to WallViewer
+const arrangePlacements = ref([])   // positions + zOrder passed to WallViewer
+const selectedArrangeIndex = ref(null)
+const arrangeScale = ref(1.0)
 const compositing = ref(false)
-const cropKey = ref(0)            // incremented after each composite to reset ImageCropper
+const cropKey = ref(0)
+let arrangeBaseFrames = []  // { width, height } in cm at scale=1 for each photo
+let arrangeZCounter = 0
 let compositeTimeout = null
-let localPositions = new Map()    // frame_id → updated { x, y } from drag (not reactive)
 
 const goToStep = (n) => {
   if (n < step.value) step.value = n
@@ -182,41 +185,80 @@ const goToArrangeStep = () => {
 }
 
 const initWallArrangement = () => {
-  localPositions.clear()
+  arrangeZCounter = 0
+  selectedArrangeIndex.value = null
+  arrangeScale.value = 1.0
   const photos = capturedImages.value
   if (!photos.length) return
 
   const wallW = wallWidthCm.value || 200
-  const wallH = wallHeightCm.value || 200
 
-  // Distribute photo widths proportionally to their pixel aspect ratios
+  // Distribute widths proportionally to pixel aspect ratios; preserve each photo's aspect
   const totalAspect = photos.reduce((s, p) => s + p.width / p.height, 0)
   let xCm = -wallW / 2
 
-  arrangeFrames.value = photos.map((photo, i) => {
-    const frameCmW = wallW * ((photo.width / photo.height) / totalAspect)
-    return {
-      id: `photo_${i}`,
-      dimensions: { cm: { width: frameCmW, height: wallH, depth: 0.5 } },
-      styling: { frame_color: '#555555' },
-      pictureImage: photo.dataUrl
-    }
+  arrangeBaseFrames = photos.map(photo => {
+    const photoAspect = photo.width / photo.height
+    const w = wallW * (photoAspect / totalAspect)
+    return { width: w, height: w / photoAspect }
   })
 
+  arrangeFrames.value = photos.map((photo, i) => ({
+    id: `photo_${i}`,
+    dimensions: { cm: { width: arrangeBaseFrames[i].width, height: arrangeBaseFrames[i].height, depth: 0.5 } },
+    styling: { frame_color: '#555555' },
+    pictureImage: photo.dataUrl
+  }))
+
   arrangePlacements.value = photos.map((_, i) => {
-    const frameCmW = arrangeFrames.value[i].dimensions.cm.width
+    const frameCmW = arrangeBaseFrames[i].width
     const cx = xCm + frameCmW / 2
     xCm += frameCmW
-    return { frame_id: `photo_${i}`, position: { x: cx * 0.01, y: 0 }, visible: true }
+    return { frame_id: `photo_${i}`, position: { x: cx * 0.01, y: 0 }, zOrder: i, visible: true }
   })
 
   nextTick(() => applyWallArrangement())
 }
 
+// Called when user finishes dragging a photo in the 3D viewer
 const onWallFrameMoved = ({ placementIndex, position }) => {
-  const placement = arrangePlacements.value[placementIndex]
-  if (!placement) return
-  localPositions.set(placement.frame_id, position)
+  if (!arrangePlacements.value[placementIndex]) return
+  arrangeZCounter++
+  const z = arrangeZCounter
+  arrangePlacements.value = arrangePlacements.value.map((p, i) => ({
+    ...p,
+    position: i === placementIndex ? { ...position } : p.position,
+    zOrder: i === placementIndex ? z : (p.zOrder ?? i)
+  }))
+  clearTimeout(compositeTimeout)
+  compositeTimeout = setTimeout(applyWallArrangement, 600)
+}
+
+// Called when user taps a photo without dragging (to bring to front / select for resize)
+const onWallFrameSelected = ({ placementIndex }) => {
+  arrangeZCounter++
+  const z = arrangeZCounter
+  arrangePlacements.value = arrangePlacements.value.map((p, i) => ({
+    ...p,
+    zOrder: i === placementIndex ? z : (p.zOrder ?? i)
+  }))
+  selectedArrangeIndex.value = placementIndex
+  // Reset slider to reflect the photo's current scale vs its base size
+  const f = arrangeFrames.value[placementIndex]
+  const base = arrangeBaseFrames[placementIndex]
+  if (f && base) arrangeScale.value = parseFloat((f.dimensions.cm.width / base.width).toFixed(2))
+}
+
+const onArrangeScaleChange = () => {
+  const idx = selectedArrangeIndex.value
+  if (idx === null || !arrangeBaseFrames[idx]) return
+  const base = arrangeBaseFrames[idx]
+  const S = arrangeScale.value
+  arrangeFrames.value = arrangeFrames.value.map((f, i) =>
+    i === idx
+      ? { ...f, dimensions: { ...f.dimensions, cm: { ...f.dimensions.cm, width: base.width * S, height: base.height * S } } }
+      : f
+  )
   clearTimeout(compositeTimeout)
   compositeTimeout = setTimeout(applyWallArrangement, 600)
 }
@@ -245,10 +287,12 @@ const applyWallArrangement = async () => {
   canvas.width = outW; canvas.height = outH
   const ctx = canvas.getContext('2d')
 
-  for (const placement of arrangePlacements.value) {
+  // Draw in zOrder (lowest z first = furthest back)
+  const sorted = [...arrangePlacements.value].sort((a, b) => (a.zOrder ?? 0) - (b.zOrder ?? 0))
+  for (const placement of sorted) {
     const frame = arrangeFrames.value.find(f => f.id === placement.frame_id)
     if (!frame || placement.visible === false) continue
-    const pos = localPositions.get(placement.frame_id) ?? placement.position
+    const pos = placement.position
     const img = await loadImg(frame.pictureImage)
     const frameW = frame.dimensions.cm.width
     const frameH = frame.dimensions.cm.height
@@ -783,16 +827,38 @@ const saveWall = async () => {
             :framePlacements="arrangePlacements"
             :frames="arrangeFrames"
             @frameMoved="onWallFrameMoved"
+            @frameSelected="onWallFrameSelected"
           />
+        </div>
+
+        <!-- Resize slider for selected photo -->
+        <div v-if="selectedArrangeIndex !== null" class="mt-3 p-3 bg-dark-300 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-300">Photo {{ selectedArrangeIndex + 1 }} size</span>
+            <button @click="selectedArrangeIndex = null" class="text-gray-500 hover:text-gray-300 text-lg leading-none">×</button>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-400">0.5×</span>
+            <input
+              type="range"
+              v-model.number="arrangeScale"
+              min="0.5" max="3" step="0.05"
+              class="flex-1 accent-primary-500"
+              @input="onArrangeScaleChange"
+            />
+            <span class="text-xs text-gray-400">3×</span>
+            <span class="text-xs text-primary-400 w-8 text-right">{{ arrangeScale.toFixed(1) }}×</span>
+          </div>
         </div>
 
         <div v-if="compositing" class="flex justify-center py-2">
           <div class="w-5 h-5 border-2 border-primary-400 border-t-transparent rounded-full animate-spin"></div>
         </div>
 
-        <button @click="resetWallArrangement" class="btn btn-secondary w-full mt-3 text-sm">
-          Reset Positions
-        </button>
+        <div class="flex gap-2 mt-3">
+          <p class="text-xs text-gray-500 flex-1 self-center">Tap a photo to select & resize it</p>
+          <button @click="resetWallArrangement" class="btn btn-secondary text-sm">Reset</button>
+        </div>
       </div>
 
       <!-- Photo cropping -->

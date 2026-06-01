@@ -6,6 +6,7 @@ import FramePreview2D from '@/components/FramePreview2D.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
+import { useAuthStore } from '@/store/auth'
 import { getUploadUrl } from '@/services/api'
 import api from '@/services/api'
 
@@ -13,6 +14,7 @@ const route = useRoute()
 const router = useRouter()
 const wallsStore = useWallsStore()
 const picturesStore = usePicturesStore()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -77,9 +79,12 @@ watch(isAnyModalOpen, (open) => {
 
 onMounted(async () => {
   try {
+    const picturesFetch = authStore.isAuthenticated
+      ? picturesStore.fetchPictures()
+      : picturesStore.fetchPublicPictures()
     await Promise.all([
       wallsStore.fetchWall(parseInt(route.params.id)),
-      picturesStore.fetchPictures()
+      picturesFetch
     ])
   } catch (err) {
     error.value = 'Failed to load wall'
@@ -93,10 +98,14 @@ onUnmounted(() => {
 })
 
 const wall = computed(() => wallsStore.currentWall)
+const isOwner = computed(() =>
+  authStore.isAuthenticated && authStore.user?.id === wall.value?.user_id
+)
 
 const allFrames = computed(() => {
+  const source = authStore.isAuthenticated ? picturesStore.pictures : picturesStore.publicPictures
   const frames = []
-  picturesStore.pictures.forEach(picture => {
+  source.forEach(picture => {
     if (picture.frames) {
       picture.frames.forEach(frame => {
         frames.push({
@@ -817,7 +826,7 @@ const getFrameDimensions = (frame) => {
             </template>
           </div>
           <button
-            v-if="!editingWall"
+            v-if="!editingWall && isOwner"
             @click="startEditWall"
             class="btn btn-secondary text-sm"
           >
