@@ -310,8 +310,10 @@ def create_frame(
     picture_id: int,
     payload: FrameCreateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
+    if current_user is None:
+        current_user = get_guest_user(db)
     picture = (
         db.query(Picture)
         .filter(Picture.id == picture_id, Picture.user_id == current_user.id)
