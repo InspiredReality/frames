@@ -71,7 +71,7 @@ const effectiveAspectRatio = computed(() => {
 
 // Lock body scroll when any modal is open (prevents background scrolling on mobile)
 const isAnyModalOpen = computed(() => {
-  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value || showWallRecropModal.value)
+  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value || showWallRecropModal.value || showSaveLayoutModal.value)
 })
 
 watch(isAnyModalOpen, (open) => {
@@ -219,14 +219,23 @@ const toggleFrameVisibility = async (placementIndex) => {
 
 const savedLayouts = computed(() => wall.value?.scene_config?.layouts || [])
 
+const showSaveLayoutModal = ref(false)
+const layoutName = ref('')
+
+const openSaveLayoutModal = () => {
+  layoutName.value = `Layout ${savedLayouts.value.length + 1}`
+  showSaveLayoutModal.value = true
+}
+
 const saveLayout = async () => {
+  showSaveLayoutModal.value = false
   try {
     saving.value = true
     const thumbnail = wallViewerRef.value?.captureScreenshot() || null
     const layouts = JSON.parse(JSON.stringify(wall.value?.scene_config?.layouts || []))
     layouts.push({
       id: Date.now().toString(),
-      name: `Layout ${layouts.length + 1}`,
+      name: layoutName.value.trim() || `Layout ${layouts.length + 1}`,
       created_at: new Date().toISOString(),
       frame_placements: JSON.parse(JSON.stringify(wall.value.frame_placements || [])),
       width_cm: wall.value.width_cm,
@@ -845,7 +854,7 @@ const getFrameDimensions = (frame) => {
         <p class="text-xs text-gray-500 mt-2 text-center">Left-click and drag frames to move them. Right-click and drag to rotate the view.</p>
         <div class="mt-3 flex justify-center">
           <button
-            @click="saveLayout"
+            @click="openSaveLayoutModal"
             :disabled="saving"
             class="btn btn-secondary text-sm"
           >
@@ -1603,6 +1612,40 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
         <p v-if="saveError" class="text-red-400 text-xs mt-3 text-center">{{ saveError }}</p>
+      </div>
+    </div>
+
+    <!-- Save Layout name modal -->
+    <div
+      v-if="showSaveLayoutModal"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+      @click.self="showSaveLayoutModal = false"
+    >
+      <div class="card w-full max-w-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold">Name This Layout</h2>
+          <button @click="showSaveLayoutModal = false" class="text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <input
+          v-model="layoutName"
+          type="text"
+          placeholder="e.g., Holiday arrangement"
+          class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm mb-4"
+          @keyup.enter="saveLayout"
+          autofocus
+        />
+        <div class="flex gap-3">
+          <button @click="showSaveLayoutModal = false" class="btn btn-secondary flex-1 text-sm">
+            Cancel
+          </button>
+          <button @click="saveLayout" class="btn btn-primary flex-1 text-sm">
+            Save
+          </button>
+        </div>
       </div>
     </div>
 
