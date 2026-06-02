@@ -21,6 +21,7 @@ const saving = ref(false)
 const error = ref('')
 const saveError = ref('')
 const showFramePicker = ref(false)
+const pickerTab = ref('my') // 'my' or 'public'
 const wallViewerRef = ref(null)
 
 // Frame editing state
@@ -79,12 +80,11 @@ watch(isAnyModalOpen, (open) => {
 
 onMounted(async () => {
   try {
-    const picturesFetch = authStore.isAuthenticated
-      ? picturesStore.fetchPictures()
-      : picturesStore.fetchPublicPictures()
+    const fetchOwn = authStore.isAuthenticated ? picturesStore.fetchPictures() : Promise.resolve()
     await Promise.all([
       wallsStore.fetchWall(parseInt(route.params.id)),
-      picturesFetch
+      fetchOwn,
+      picturesStore.fetchPublicPictures()
     ])
   } catch (err) {
     error.value = 'Failed to load wall'
@@ -103,39 +103,73 @@ const isOwner = computed(() =>
 )
 
 const allFrames = computed(() => {
-  const source = authStore.isAuthenticated ? picturesStore.pictures : picturesStore.publicPictures
   const frames = []
-  source.forEach(picture => {
+  const seenPictureIds = new Set()
+
+  const addFromPicture = (picture, isPublic) => {
+    if (seenPictureIds.has(picture.id)) return
+    seenPictureIds.add(picture.id)
     if (picture.frames && picture.frames.length > 0) {
       picture.frames.forEach(frame => {
         frames.push({
           ...frame,
           pictureName: picture.name,
-          pictureImage: picture.thumbnail_path || picture.image_path
+          pictureImage: picture.thumbnail_path || picture.image_path,
+          isPublic
         })
       })
     } else {
-      // Picture has no frame config yet — create a synthetic entry with defaults
       frames.push({
         id: null,
         pictureId: picture.id,
         pictureName: picture.name,
         pictureImage: picture.thumbnail_path || picture.image_path,
         dimensions: { cm: { width: 20, height: 25, depth: 2 } },
-        styling: { frame_color: '#8B4513', frame_thickness: 1 }
+        styling: { frame_color: '#8B4513', frame_thickness: 1 },
+        isPublic
       })
     }
-  })
+  }
+
+  if (authStore.isAuthenticated) {
+    picturesStore.pictures.forEach(p => addFromPicture(p, false))
+  }
+  picturesStore.publicPictures.forEach(p => addFromPicture(p, true))
+
   return frames
 })
 
+const findFrameForPlacement = (placement) => {
+  return allFrames.value.find(f =>
+    placement.frame_id
+      ? f.id === placement.frame_id
+      : (placement.picture_id && f.pictureId === placement.picture_id)
+  ) || null
+}
+
 // Frames available to add (not already placed on this wall)
+const _placedIds = computed(() => ({
+  frameIds: new Set((wall.value?.frame_placements || []).map(p => p.frame_id).filter(Boolean)),
+  pictureIds: new Set((wall.value?.frame_placements || []).map(p => p.picture_id).filter(Boolean))
+}))
+
+const _isNotPlaced = (frame) => {
+  return frame.pictureId
+    ? !_placedIds.value.pictureIds.has(frame.pictureId)
+    : !_placedIds.value.frameIds.has(frame.id)
+}
+
+const availableMyFrames = computed(() =>
+  allFrames.value.filter(f => !f.isPublic && _isNotPlaced(f))
+)
+
+const availablePublicFrames = computed(() =>
+  allFrames.value.filter(f => f.isPublic && _isNotPlaced(f))
+)
+
 const availableFrames = computed(() => {
-  const placedFrameIds = new Set((wall.value?.frame_placements || []).map(p => p.frame_id).filter(Boolean))
-  const placedPictureIds = new Set((wall.value?.frame_placements || []).map(p => p.picture_id).filter(Boolean))
-  return allFrames.value.filter(frame =>
-    frame.pictureId ? !placedPictureIds.has(frame.pictureId) : !placedFrameIds.has(frame.id)
-  )
+  if (!authStore.isAuthenticated) return availablePublicFrames.value
+  return pickerTab.value === 'my' ? availableMyFrames.value : availablePublicFrames.value
 })
 
 const addFrame = async (frame) => {
@@ -233,14 +267,16 @@ const selectedPlacement = computed(() => {
 
 const selectedFrame = computed(() => {
   if (!selectedPlacement.value) return null
-  return allFrames.value.find(f => f.id === selectedPlacement.value.frame_id) || null
+  return findFrameForPlacement(selectedPlacement.value)
 })
 
 // Get the picture for the selected frame
 const selectedPicture = computed(() => {
   if (!selectedFrame.value) return null
-  return picturesStore.pictures.find(p =>
-    p.frames?.some(f => f.id === selectedFrame.value.id)
+  const allPictures = [...picturesStore.pictures, ...picturesStore.publicPictures]
+  return allPictures.find(p =>
+    (selectedFrame.value.id && p.frames?.some(f => f.id === selectedFrame.value.id)) ||
+    (selectedFrame.value.pictureId && p.id === selectedFrame.value.pictureId)
   ) || null
 })
 
@@ -727,7 +763,7 @@ const saveRecrop = async () => {
 const closeFrameEditor = () => {
   selectedPlacementIndex.value = null
   editingFrameDimensions.value = false
-  editingFrameColor.value = false
+  showCustomColorPicker.value = false
   showRecropModal.value = false
   saveError.value = ''
 }
@@ -1025,14 +1061,14 @@ const getFrameDimensions = (frame) => {
             <div class="flex items-center gap-3">
               <div class="w-12 h-12 bg-dark-100 rounded overflow-hidden flex-shrink-0">
                 <img
-                  v-if="allFrames.find(f => f.id === placement.frame_id)?.pictureImage"
-                  :src="getImageUrl(allFrames.find(f => f.id === placement.frame_id).pictureImage)"
+                  v-if="findFrameForPlacement(placement)?.pictureImage"
+                  :src="getImageUrl(findFrameForPlacement(placement).pictureImage)"
                   class="w-full h-full object-cover"
                 />
               </div>
               <div>
                 <p class="font-medium">
-                  {{ allFrames.find(f => f.id === placement.frame_id)?.pictureName || 'Unknown' }}
+                  {{ findFrameForPlacement(placement)?.pictureName || 'Unknown' }}
                 </p>
                 <p class="text-sm text-gray-400">
                   {{ formatPlacementPosition(placement) }}
@@ -1112,12 +1148,32 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
 
+        <!-- My Frames / Public tabs (authenticated only) -->
+        <div v-if="authStore.isAuthenticated" class="flex gap-2 mb-4">
+          <button
+            @click="pickerTab = 'my'"
+            class="px-3 py-1.5 rounded-lg text-sm transition"
+            :class="pickerTab === 'my' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
+          >
+            My Frames ({{ availableMyFrames.length }})
+          </button>
+          <button
+            @click="pickerTab = 'public'"
+            class="px-3 py-1.5 rounded-lg text-sm transition"
+            :class="pickerTab === 'public' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
+          >
+            Public ({{ availablePublicFrames.length }})
+          </button>
+        </div>
+
         <div v-if="availableFrames.length === 0" class="text-center py-6">
           <p class="text-gray-400 mb-4">
-            {{ allFrames.length === 0 ? 'No frames available. Add some frames first.' : 'All frames are already placed on this wall.' }}
+            {{ pickerTab === 'my' && authStore.isAuthenticated && availableMyFrames.length === 0
+              ? 'No personal frames available. Capture a frame first.'
+              : 'All frames are already placed on this wall.' }}
           </p>
-          <router-link v-if="allFrames.length === 0" to="/capture/frame" class="btn btn-primary">
-            Add Frame
+          <router-link v-if="pickerTab === 'my' || !authStore.isAuthenticated" to="/capture/frame" class="btn btn-primary">
+            Capture Frame
           </router-link>
         </div>
 
