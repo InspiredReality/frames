@@ -86,8 +86,11 @@ onMounted(async () => {
       fetchOwn,
       picturesStore.fetchPublicPictures()
     ])
+    if (!wallsStore.currentWall) {
+      error.value = 'Wall not found'
+    }
   } catch (err) {
-    error.value = 'Failed to load wall'
+    error.value = err.response?.status === 404 ? 'Wall not found' : 'Failed to load wall'
   } finally {
     loading.value = false
   }
@@ -817,7 +820,19 @@ const getFrameDimensions = (frame) => {
     <!-- Error -->
     <div v-else-if="error" class="text-center py-12">
       <p class="text-red-400 mb-4">{{ error }}</p>
-      <button @click="router.back()" class="btn btn-secondary">Go Back</button>
+      <div class="flex gap-3 justify-center">
+        <button @click="router.back()" class="btn btn-secondary">Go Back</button>
+        <router-link to="/public-gallery" class="btn btn-secondary">Public Gallery</router-link>
+      </div>
+    </div>
+
+    <!-- Fallback: wall is null after loading (should not normally happen) -->
+    <div v-else class="text-center py-12">
+      <p class="text-gray-400 mb-4">Wall not found or not accessible.</p>
+      <div class="flex gap-3 justify-center">
+        <button @click="router.back()" class="btn btn-secondary">Go Back</button>
+        <router-link to="/public-gallery" class="btn btn-secondary">Public Gallery</router-link>
+      </div>
     </div>
 
     <!-- Editor -->
