@@ -826,18 +826,8 @@ const getFrameDimensions = (frame) => {
       </div>
     </div>
 
-    <!-- Fallback: wall is null after loading (should not normally happen) -->
-    <div v-else class="text-center py-12">
-      <p class="text-gray-400 mb-4">Wall not found or not accessible.</p>
-      <div class="flex gap-3 justify-center">
-        <button @click="router.back()" class="btn btn-secondary">Go Back</button>
-        <router-link to="/public-gallery" class="btn btn-secondary">Public Gallery</router-link>
-      </div>
-    </div>
-
     <!-- Editor -->
-    <div v-else-if="wall">
-      <div class="flex items-center justify-between mb-6">
+    <div v-else-if="wall">      <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-2xl font-bold">{{ wall.name }}</h1>
           <p class="text-gray-400">Edit frame placements</p>
@@ -1153,6 +1143,15 @@ const getFrameDimensions = (frame) => {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Fallback: wall is null after loading -->
+    <div v-else class="text-center py-12">
+      <p class="text-gray-400 mb-4">Wall not found or not accessible.</p>
+      <div class="flex gap-3 justify-center">
+        <button @click="router.back()" class="btn btn-secondary">Go Back</button>
+        <router-link to="/public-gallery" class="btn btn-secondary">Public Gallery</router-link>
       </div>
     </div>
 
