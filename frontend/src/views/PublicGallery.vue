@@ -79,8 +79,8 @@ const getFrameDimensions = (picture) => {
         <router-link to="/register" class="btn btn-primary text-sm py-1.5 px-3">
           Create Account
         </router-link>
-        <router-link to="/login" class="btn btn-secondary text-sm py-1.5 px-3">
-          Sign In
+        <router-link to="/login" class="btn btn-secondary">
+          Login
         </router-link>
       </div>
     </div>

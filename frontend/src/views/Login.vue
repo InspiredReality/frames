@@ -64,7 +64,7 @@ const handleSubmit = async () => {
           class="btn btn-primary w-full py-3"
         >
           <span v-if="loading">Signing in...</span>
-          <span v-else>Sign In</span>
+          <span v-else>Login</span>
         </button>
       </form>
 

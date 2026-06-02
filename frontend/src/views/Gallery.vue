@@ -602,7 +602,7 @@ const getFrameDimensions = (frame) => {
         class="px-4 py-2 rounded-lg transition"
         :class="activeTab === 'all' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
       >
-        All
+        Everything
       </button>
       <button
         @click="activeTab = 'walls'"

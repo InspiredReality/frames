@@ -34,7 +34,6 @@ const routes = [
     path: '/reset-password',
     name: 'reset-password',
     component: () => import('@/views/ResetPassword.vue'),
-    meta: { guest: true }
   },
   {
     path: '/capture/frame',
