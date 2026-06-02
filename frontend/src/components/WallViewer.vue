@@ -362,14 +362,18 @@ const updateFrames = () => {
   })
   frameObjects.clear()
 
-  // Sort placements largest-area-first so smaller frames get a higher z (closer to camera)
+  // Sort by explicit zOrder if present, otherwise largest-area-first
   const sortedPlacements = props.framePlacements
     .map((placement, index) => {
       const frame = props.frames.find(f => f.id === placement.frame_id)
       const dims = frame?.dimensions?.cm || { width: 20, height: 25 }
       return { placement, originalIndex: index, area: dims.width * dims.height }
     })
-    .sort((a, b) => b.area - a.area)
+    .sort((a, b) =>
+      a.placement.zOrder !== undefined && b.placement.zOrder !== undefined
+        ? a.placement.zOrder - b.placement.zOrder
+        : b.area - a.area
+    )
 
   sortedPlacements.forEach(({ placement, originalIndex }, sortedIndex) => {
     const frame = props.frames.find(f => f.id === placement.frame_id)
@@ -395,12 +399,16 @@ const updateFrames = () => {
     const pictureHeight = frameHeight - borderWidth * 2
     const pictureGeometry = new THREE.PlaneGeometry(pictureWidth, pictureHeight)
 
-    // Load the image texture - use same synchronous pattern as wall texture
-    const imageUrl = frame.pictureImage ? getUploadUrl(frame.pictureImage) : null
+    const imageUrl = frame.pictureImage
+      ? (frame.pictureImage.startsWith('data:') || frame.pictureImage.startsWith('blob:')
+          ? frame.pictureImage
+          : getUploadUrl(frame.pictureImage))
+      : null
     let pictureMaterial
 
     if (imageUrl) {
-      const texture = textureLoader.load(imageUrl)
+      const loader = new THREE.TextureLoader()
+      const texture = loader.load(imageUrl)
       texture.colorSpace = THREE.SRGBColorSpace
       pictureMaterial = new THREE.MeshStandardMaterial({
         map: texture,
@@ -537,5 +545,5 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="viewer-container w-full h-96 rounded-lg overflow-hidden"></div>
+  <div ref="containerRef" class="viewer-container w-full h-full rounded-lg overflow-hidden"></div>
 </template>

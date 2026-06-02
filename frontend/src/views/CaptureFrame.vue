@@ -84,6 +84,10 @@ const onCrop = (data) => {
   croppedImage.value = data
 }
 
+const goToStep = (n) => {
+  if (n < step.value) step.value = n
+}
+
 const retake = () => {
   capturedImage.value = null
   croppedImage.value = null
@@ -164,22 +168,16 @@ const savePicture = async () => {
 
     <!-- Step indicator -->
     <div class="flex items-center justify-center mb-8">
-      <div
-        v-for="s in 3"
-        :key="s"
-        class="flex items-center"
-      >
+      <div v-for="s in 3" :key="s" class="flex items-center">
         <div
           class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors"
-          :class="step >= s ? 'bg-primary-500 text-white' : 'bg-dark-300 text-gray-400'"
-        >
-          {{ s }}
-        </div>
-        <div
-          v-if="s < 3"
-          class="w-12 h-1 mx-2"
-          :class="step > s ? 'bg-primary-500' : 'bg-dark-300'"
-        ></div>
+          :class="[
+            step >= s ? 'bg-primary-500 text-white' : 'bg-dark-300 text-gray-400',
+            s < step ? 'cursor-pointer hover:opacity-75' : 'cursor-default'
+          ]"
+          @click="goToStep(s)"
+        >{{ s }}</div>
+        <div v-if="s < 3" class="w-12 h-1 mx-2" :class="step > s ? 'bg-primary-500' : 'bg-dark-300'"></div>
       </div>
     </div>
 

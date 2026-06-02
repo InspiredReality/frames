@@ -89,16 +89,14 @@ def get_public_walls(
 def get_wall(
     wall_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
-    wall = (
-        db.query(Wall)
-        .filter(Wall.id == wall_id, Wall.user_id == current_user.id)
-        .first()
-    )
+    wall = db.query(Wall).filter(Wall.id == wall_id).first()
     if not wall:
         raise HTTPException(status_code=404, detail="Wall not found")
-
+    is_owner = current_user is not None and wall.user_id == current_user.id
+    if wall.is_private and not is_owner:
+        raise HTTPException(status_code=404, detail="Wall not found")
     return {"wall": wall.to_dict(include_frames=True)}
 
 
@@ -202,19 +200,25 @@ def update_wall(
     wall_id: int,
     payload: WallUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
-    wall = (
-        db.query(Wall)
-        .filter(Wall.id == wall_id, Wall.user_id == current_user.id)
-        .first()
-    )
+    wall = db.query(Wall).filter(Wall.id == wall_id).first()
     if not wall:
         raise HTTPException(status_code=404, detail="Wall not found")
+    is_owner = current_user is not None and wall.user_id == current_user.id
+    if wall.is_private and not is_owner:
+        raise HTTPException(status_code=403, detail="Not authorized")
 
     data = payload.model_dump(exclude_unset=True)
 
-    for field in ("name", "description", "width_cm", "height_cm", "background_color", "scene_config", "is_private"):
+    # Owner-only fields
+    if is_owner:
+        for field in ("name", "description", "width_cm", "height_cm", "background_color", "is_private"):
+            if field in data:
+                setattr(wall, field, data[field])
+
+    # Public-accessible fields (any viewer of a public wall may update these)
+    for field in ("scene_config",):
         if field in data:
             setattr(wall, field, data[field])
 
@@ -332,15 +336,14 @@ def add_frame_placement(
     wall_id: int,
     payload: PlacementRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
-    wall = (
-        db.query(Wall)
-        .filter(Wall.id == wall_id, Wall.user_id == current_user.id)
-        .first()
-    )
+    wall = db.query(Wall).filter(Wall.id == wall_id).first()
     if not wall:
         raise HTTPException(status_code=404, detail="Wall not found")
+    is_owner = current_user is not None and wall.user_id == current_user.id
+    if wall.is_private and not is_owner:
+        raise HTTPException(status_code=403, detail="Not authorized")
 
     placement = {
         "frame_id": payload.frame_id,

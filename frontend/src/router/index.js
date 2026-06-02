@@ -54,8 +54,7 @@ const routes = [
   {
     path: '/wall/:id',
     name: 'wall-editor',
-    component: () => import('@/views/WallEditor.vue'),
-    meta: { requiresAuth: true }
+    component: () => import('@/views/WallEditor.vue')
   },
   {
     path: '/ar/:wallId?',
