@@ -106,13 +106,23 @@ const allFrames = computed(() => {
   const source = authStore.isAuthenticated ? picturesStore.pictures : picturesStore.publicPictures
   const frames = []
   source.forEach(picture => {
-    if (picture.frames) {
+    if (picture.frames && picture.frames.length > 0) {
       picture.frames.forEach(frame => {
         frames.push({
           ...frame,
           pictureName: picture.name,
           pictureImage: picture.thumbnail_path || picture.image_path
         })
+      })
+    } else {
+      // Picture has no frame config yet — create a synthetic entry with defaults
+      frames.push({
+        id: null,
+        pictureId: picture.id,
+        pictureName: picture.name,
+        pictureImage: picture.thumbnail_path || picture.image_path,
+        dimensions: { cm: { width: 20, height: 25, depth: 2 } },
+        styling: { frame_color: '#8B4513', frame_thickness: 1 }
       })
     }
   })
@@ -121,19 +131,20 @@ const allFrames = computed(() => {
 
 // Frames available to add (not already placed on this wall)
 const availableFrames = computed(() => {
-  const placedFrameIds = (wall.value?.frame_placements || []).map(p => p.frame_id)
-  return allFrames.value.filter(frame => !placedFrameIds.includes(frame.id))
+  const placedFrameIds = new Set((wall.value?.frame_placements || []).map(p => p.frame_id).filter(Boolean))
+  const placedPictureIds = new Set((wall.value?.frame_placements || []).map(p => p.picture_id).filter(Boolean))
+  return allFrames.value.filter(frame =>
+    frame.pictureId ? !placedPictureIds.has(frame.pictureId) : !placedFrameIds.has(frame.id)
+  )
 })
 
 const addFrame = async (frame) => {
   try {
     saving.value = true
-    await wallsStore.addFramePlacement(wall.value.id, {
-      frame_id: frame.id,
-      position: { x: 0, y: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: 1.0
-    })
+    const placement = frame.pictureId
+      ? { picture_id: frame.pictureId, position: { x: 0, y: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1.0 }
+      : { frame_id: frame.id, position: { x: 0, y: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1.0 }
+    await wallsStore.addFramePlacement(wall.value.id, placement)
     showFramePicker.value = false
   } catch (err) {
     error.value = 'Failed to add frame'

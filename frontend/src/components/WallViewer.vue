@@ -365,7 +365,11 @@ const updateFrames = () => {
   // Sort by explicit zOrder if present, otherwise largest-area-first
   const sortedPlacements = props.framePlacements
     .map((placement, index) => {
-      const frame = props.frames.find(f => f.id === placement.frame_id)
+      const frame = placement.frame_id
+        ? props.frames.find(f => f.id === placement.frame_id)
+        : placement.picture_id
+          ? props.frames.find(f => f.pictureId === placement.picture_id)
+          : null
       const dims = frame?.dimensions?.cm || { width: 20, height: 25 }
       return { placement, originalIndex: index, area: dims.width * dims.height }
     })
@@ -376,7 +380,11 @@ const updateFrames = () => {
     )
 
   sortedPlacements.forEach(({ placement, originalIndex }, sortedIndex) => {
-    const frame = props.frames.find(f => f.id === placement.frame_id)
+    const frame = placement.frame_id
+      ? props.frames.find(f => f.id === placement.frame_id)
+      : placement.picture_id
+        ? props.frames.find(f => f.pictureId === placement.picture_id)
+        : null
     if (!frame) return
     if (placement.visible === false) return
 
