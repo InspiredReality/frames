@@ -397,7 +397,7 @@ const updateFrames = () => {
 
     // Create a group to hold frame parts
     const frameGroup = new THREE.Group()
-    frameGroup.userData = { frameId: frame.id, placementIndex: originalIndex }
+    frameGroup.userData = { frameId: frame.id ?? `picture_${frame.pictureId ?? originalIndex}`, placementIndex: originalIndex }
 
     // Frame color
     const frameColor = new THREE.Color(frame.styling?.frame_color || '#8B4513')
