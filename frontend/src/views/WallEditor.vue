@@ -508,6 +508,11 @@ const cmToFtIn = (cm) => {
   return { ft, inches }
 }
 
+const fmtFtIn = (cm) => {
+  const { ft, inches } = cmToFtIn(cm)
+  return inches === 0 ? `${ft}'` : `${ft}' ${inches}"`
+}
+
 const ftInToCm = (ft, inches) => {
   return (ft * 12 + inches) * 2.54
 }
@@ -899,7 +904,7 @@ const getFrameDimensions = (frame) => {
               <p v-if="wall.description" class="text-sm text-gray-400 mt-1">{{ wall.description }}</p>
               <p class="text-sm text-gray-400 mt-1">
                 <template v-if="wall.width_cm && wall.height_cm">
-                  {{ (wall.width_cm / 2.54).toFixed(1) }}" x {{ (wall.height_cm / 2.54).toFixed(1) }}"
+                  {{ fmtFtIn(wall.width_cm) }} x {{ fmtFtIn(wall.height_cm) }}
                   ({{ wall.width_cm.toFixed(1) }} x {{ wall.height_cm.toFixed(1) }} cm)
                 </template>
                 <template v-else>
