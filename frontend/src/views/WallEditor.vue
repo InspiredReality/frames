@@ -899,8 +899,8 @@ const getFrameDimensions = (frame) => {
               <p v-if="wall.description" class="text-sm text-gray-400 mt-1">{{ wall.description }}</p>
               <p class="text-sm text-gray-400 mt-1">
                 <template v-if="wall.width_cm && wall.height_cm">
-                  {{ wall.width_cm.toFixed(1) }} x {{ wall.height_cm.toFixed(1) }} cm
-                  ({{ (wall.width_cm / 2.54).toFixed(1) }}" x {{ (wall.height_cm / 2.54).toFixed(1) }}")
+                  {{ (wall.width_cm / 2.54).toFixed(1) }}" x {{ (wall.height_cm / 2.54).toFixed(1) }}"
+                  ({{ wall.width_cm.toFixed(1) }} x {{ wall.height_cm.toFixed(1) }} cm)
                 </template>
                 <template v-else>
                   8 ft × 8 ft (default)
