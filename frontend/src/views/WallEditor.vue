@@ -69,6 +69,9 @@ const effectiveAspectRatio = computed(() => {
   return lockAspectRatio.value ? recropAspectRatio.value : null
 })
 
+const showSaveLayoutModal = ref(false)
+const layoutName = ref('')
+
 // Lock body scroll when any modal is open (prevents background scrolling on mobile)
 const isAnyModalOpen = computed(() => {
   return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value || showWallRecropModal.value || showSaveLayoutModal.value)
@@ -230,9 +233,6 @@ const toggleFrameVisibility = async (placementIndex) => {
 }
 
 const savedLayouts = computed(() => wall.value?.scene_config?.layouts || [])
-
-const showSaveLayoutModal = ref(false)
-const layoutName = ref('')
 
 const openSaveLayoutModal = () => {
   layoutName.value = `Layout ${savedLayouts.value.length + 1}`
