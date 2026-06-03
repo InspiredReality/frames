@@ -37,9 +37,10 @@ export const useWallsStore = defineStore('walls', () => {
 
   async function fetchWall(wallId) {
     loading.value = true
+    currentWall.value = null
     try {
       const response = await api.get(`/walls/${wallId}`)
-      currentWall.value = response.data.wall
+      currentWall.value = response.data.wall ?? null
       return currentWall.value
     } catch (err) {
       error.value = err.message

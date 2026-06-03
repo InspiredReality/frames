@@ -144,7 +144,13 @@ const savePicture = async () => {
       })
     }
 
-    router.push(authStore.isAuthenticated ? '/gallery' : '/public-gallery')
+    if (authStore.isAuthenticated) {
+      router.push('/gallery')
+    } else if (selectedWallId.value) {
+      router.push(`/wall/${selectedWallId.value}`)
+    } else {
+      router.push('/public-gallery')
+    }
   } catch (err) {
     error.value = err.response?.data?.error || 'Failed to save frame'
   } finally {

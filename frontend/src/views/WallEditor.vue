@@ -79,6 +79,9 @@ watch(isAnyModalOpen, (open) => {
 })
 
 onMounted(async () => {
+  if (!authStore.isAuthenticated) {
+    pickerTab.value = 'public'
+  }
   try {
     const fetchOwn = authStore.isAuthenticated ? picturesStore.fetchPictures() : Promise.resolve()
     await Promise.all([
@@ -90,7 +93,13 @@ onMounted(async () => {
       error.value = 'Wall not found'
     }
   } catch (err) {
-    error.value = err.response?.status === 404 ? 'Wall not found' : 'Failed to load wall'
+    if (err.response?.status === 404) {
+      error.value = 'Wall not found'
+    } else if (err.response?.status === 403) {
+      error.value = 'This wall is private'
+    } else {
+      error.value = 'Failed to load wall'
+    }
   } finally {
     loading.value = false
   }
@@ -827,7 +836,19 @@ const getFrameDimensions = (frame) => {
     </div>
 
     <!-- Editor -->
-    <div v-else-if="wall">      <div class="flex items-center justify-between mb-6">
+    <div v-else-if="wall">
+      <!-- Guest / public-viewer banner -->
+      <div v-if="!authStore.isAuthenticated" class="mb-4 p-3 bg-primary-900/40 border border-primary-600 rounded-lg text-sm text-primary-300 flex items-start gap-2">
+        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>
+          You're viewing as a guest — add frames, rearrange, and save layouts freely.
+          <router-link to="/register" class="underline hover:text-white ml-1">Create an account</router-link> to keep your walls private.
+        </span>
+      </div>
+
+      <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-2xl font-bold">{{ wall.name }}</h1>
           <p class="text-gray-400">Edit frame placements</p>
@@ -836,7 +857,7 @@ const getFrameDimensions = (frame) => {
           <button @click="showFramePicker = true" class="btn btn-primary">
             Add Frame
           </button>
-          <router-link :to="`/ar/${wall.id}`" class="btn btn-secondary">
+          <router-link v-if="authStore.isAuthenticated" :to="`/ar/${wall.id}`" class="btn btn-secondary">
             AR View
           </router-link>
         </div>
@@ -1192,13 +1213,24 @@ const getFrameDimensions = (frame) => {
 
         <div v-if="availableFrames.length === 0" class="text-center py-6">
           <p class="text-gray-400 mb-4">
-            {{ pickerTab === 'my' && authStore.isAuthenticated && availableMyFrames.length === 0
-              ? 'No personal frames available. Capture a frame first.'
-              : 'All frames are already placed on this wall.' }}
+            <template v-if="!authStore.isAuthenticated">
+              No public frames available yet. Capture a frame to add it here.
+            </template>
+            <template v-else-if="pickerTab === 'my' && availableMyFrames.length === 0">
+              No personal frames available. Capture a frame first.
+            </template>
+            <template v-else>
+              All frames are already placed on this wall.
+            </template>
           </p>
-          <router-link v-if="pickerTab === 'my' || !authStore.isAuthenticated" to="/capture/frame" class="btn btn-primary">
-            Capture Frame
-          </router-link>
+          <div class="flex gap-2 justify-center">
+            <router-link to="/capture/frame" class="btn btn-primary">
+              Capture Frame
+            </router-link>
+            <router-link v-if="!authStore.isAuthenticated" to="/capture/wall" class="btn btn-secondary">
+              Capture Wall
+            </router-link>
+          </div>
         </div>
 
         <div v-else class="grid grid-cols-2 gap-3">
@@ -1254,8 +1286,8 @@ const getFrameDimensions = (frame) => {
           />
         </div>
 
-        <!-- Recrop button -->
-        <div class="mb-4">
+        <!-- Recrop button (owner only) -->
+        <div v-if="authStore.isAuthenticated" class="mb-4">
           <button
             @click="startRecrop"
             class="text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1"
@@ -1272,7 +1304,7 @@ const getFrameDimensions = (frame) => {
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-semibold">Frame Properties</h3>
             <button
-              v-if="!editingFrameDimensions"
+              v-if="!editingFrameDimensions && authStore.isAuthenticated"
               @click="startEditFrameDimensions"
               class="text-gray-400 hover:text-primary-400 text-sm"
             >

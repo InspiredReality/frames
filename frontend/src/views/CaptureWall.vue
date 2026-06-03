@@ -540,12 +540,12 @@ const saveWall = async () => {
       file = new File([croppedImage.value.blob], 'wall.jpg', { type: 'image/jpeg' })
     }
 
-    await wallsStore.uploadWall(file, wallName.value, wallDescription.value, {
+    const savedWall = await wallsStore.uploadWall(file, wallName.value, wallDescription.value, {
       width_cm: getWidthInCm(),
       height_cm: getHeightInCm()
     }, bgColor)
 
-    router.push(authStore.isAuthenticated ? '/gallery' : '/public-gallery')
+    router.push(authStore.isAuthenticated ? '/gallery' : `/wall/${savedWall.id}`)
   } catch (err) {
     error.value = err.response?.data?.error || 'Failed to save wall'
   } finally {
