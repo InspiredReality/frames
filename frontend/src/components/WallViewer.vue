@@ -66,8 +66,11 @@ const initScene = () => {
   renderer.domElement.addEventListener('mousemove', onMouseMove)
   renderer.domElement.addEventListener('mouseup', onMouseUp)
 
+  // Allow vertical page scroll by default; preventDefault only when dragging a frame
+  renderer.domElement.style.touchAction = 'pan-y'
+
   // Add touch listeners for mobile frame dragging
-  renderer.domElement.addEventListener('touchstart', onTouchStart)
+  renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false })
   renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false })
   renderer.domElement.addEventListener('touchend', onTouchEnd)
 
@@ -217,6 +220,7 @@ const onTouchStart = (event) => {
   if (intersects.length > 0) {
     const frameGroup = findFrameGroup(intersects[0].object)
     if (frameGroup) {
+      event.preventDefault() // Block page scroll — finger landed on a frame
       draggedFrame = frameGroup
       isDragging = false
 
