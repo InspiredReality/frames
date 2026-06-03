@@ -6,6 +6,10 @@ import { getUploadUrl } from '@/services/api'
 
 const props = defineProps({
   wallImageUrl: String,
+  wallBackgroundColor: {
+    type: String,
+    default: null
+  },
   wallWidthCm: {
     type: Number,
     default: 0
@@ -303,8 +307,11 @@ const createWall = () => {
       side: THREE.DoubleSide
     })
   } else {
+    const fallbackColor = props.wallBackgroundColor
+      ? new THREE.Color(props.wallBackgroundColor)
+      : new THREE.Color(0xe0e0e0)
     material = new THREE.MeshStandardMaterial({
-      color: 0xe0e0e0,
+      color: fallbackColor,
       side: THREE.DoubleSide
     })
   }
@@ -499,6 +506,7 @@ const handleResize = () => {
 }
 
 watch(() => props.wallImageUrl, createWall)
+watch(() => props.wallBackgroundColor, createWall)
 watch(() => props.wallWidthCm, createWall)
 watch(() => props.wallHeightCm, createWall)
 watch(() => props.framePlacements, updateFrames, { deep: true })
