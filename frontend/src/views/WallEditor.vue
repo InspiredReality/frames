@@ -847,7 +847,8 @@ const getFrameDimensions = (frame) => {
         <div class="h-96">
           <WallViewer
             ref="wallViewerRef"
-            :wallImageUrl="getImageUrl(wall.image_path)"
+            :wallImageUrl="wall.image_path ? getImageUrl(wall.image_path) : null"
+            :wallBackgroundColor="wall.background_color || null"
             :wallWidthCm="wall.width_cm || 0"
             :wallHeightCm="wall.height_cm || 0"
             :framePlacements="wall.frame_placements || []"
