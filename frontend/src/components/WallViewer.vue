@@ -211,13 +211,16 @@ const onMouseUp = (event) => {
 // the container in capture phase. Mouse pointer events are let through (pointerType !== 'touch')
 // so OrbitControls right-click rotate and scroll-zoom still work on desktop.
 //
-// touch-action:none (set by OrbitControls) is kept intentionally — we implement page scroll
-// manually with window.scrollBy() + inertia so that frame drag never conflicts with scroll.
+// touch-action:none (set by OrbitControls) is kept — we implement page scroll manually with
+// window.scrollBy() + inertia. Two-finger events are NOT stopped; OrbitControls sees both
+// pointers and handles pinch zoom normally.
 
 let touchScrolling = false
 let touchScrollLastY = 0
 let touchScrollVelocity = 0
 let touchScrollAnimId = null
+const activeTouchPointers = new Set() // tracks all active touch pointerIds
+let singleTouchPointerId = null       // pointerId we treat as the single-finger
 
 const applyScrollMomentum = () => {
   if (Math.abs(touchScrollVelocity) < 0.5) { touchScrollAnimId = null; return }
@@ -228,10 +231,25 @@ const applyScrollMomentum = () => {
 
 const onTouchPointerDown = (event) => {
   if (event.pointerType !== 'touch') return
-  if (!event.isPrimary) return
 
-  // Block OrbitControls from seeing this event (prevents setPointerCapture on the canvas)
-  event.stopPropagation()
+  activeTouchPointers.add(event.pointerId)
+
+  if (activeTouchPointers.size > 1) {
+    // Second finger arrived — hand off to OrbitControls for pinch zoom.
+    // Cancel any in-progress single-finger operation.
+    touchScrolling = false
+    touchScrollVelocity = 0
+    if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
+    if (draggedFrame) { draggedFrame = null; isDragging = false; }
+    controls.enabled = true
+    singleTouchPointerId = null
+    // Do NOT stopPropagation — OrbitControls must see this (and the earlier first finger) to
+    // initiate its two-finger DOLLY_PAN state.
+    return
+  }
+
+  // Single finger — our handler owns this gesture
+  singleTouchPointerId = event.pointerId
   if (!containerRef.value) return
 
   if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
@@ -260,7 +278,7 @@ const onTouchPointerDown = (event) => {
     }
   }
 
-  // Finger is on the canvas background — set up manual page scroll
+  // Finger is on the canvas background — manual page scroll
   touchScrolling = true
   touchScrollLastY = event.clientY
   touchScrollVelocity = 0
@@ -268,9 +286,8 @@ const onTouchPointerDown = (event) => {
 
 const onTouchPointerMove = (event) => {
   if (event.pointerType !== 'touch') return
-  if (!event.isPrimary) return
-
-  event.stopPropagation()
+  // Ignore any pointer that isn't our tracked single-finger (incl. two-finger moves)
+  if (event.pointerId !== singleTouchPointerId) return
 
   if (touchScrolling) {
     const dy = event.clientY - touchScrollLastY
@@ -300,9 +317,16 @@ const onTouchPointerMove = (event) => {
 
 const onTouchPointerUp = (event) => {
   if (event.pointerType !== 'touch') return
-  if (!event.isPrimary) return
 
-  event.stopPropagation()
+  activeTouchPointers.delete(event.pointerId)
+
+  if (event.pointerId !== singleTouchPointerId) {
+    // A non-single-touch finger lifted; re-enable controls when all fingers are gone
+    if (activeTouchPointers.size === 0) { controls.enabled = true; singleTouchPointerId = null }
+    return
+  }
+
+  singleTouchPointerId = null
 
   if (touchScrolling) {
     touchScrolling = false
@@ -334,13 +358,16 @@ const onTouchPointerUp = (event) => {
 
 const onTouchPointerCancel = (event) => {
   if (event.pointerType !== 'touch') return
-  event.stopPropagation()
-  touchScrolling = false
-  touchScrollVelocity = 0
-  if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
-  controls.enabled = true
-  draggedFrame = null
-  isDragging = false
+  activeTouchPointers.delete(event.pointerId)
+  if (activeTouchPointers.size === 0) {
+    touchScrolling = false
+    touchScrollVelocity = 0
+    if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
+    controls.enabled = true
+    draggedFrame = null
+    isDragging = false
+    singleTouchPointerId = null
+  }
 }
 
 const createWall = () => {
