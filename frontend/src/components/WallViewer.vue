@@ -66,10 +66,6 @@ const initScene = () => {
   renderer.domElement.addEventListener('mousemove', onMouseMove)
   renderer.domElement.addEventListener('mouseup', onMouseUp)
 
-  // Three.js WebGLRenderer sets touch-action:none on the canvas; override so the browser
-  // can scroll vertically when the finger is NOT on a frame.
-  renderer.domElement.style.touchAction = 'pan-y'
-
   // Three.js r152+ OrbitControls uses pointer events (pointerdown → setPointerCapture),
   // not touch events. setPointerCapture redirects all input to the canvas and kills native
   // scroll. We intercept in capture phase on the container so our handlers fire BEFORE
@@ -101,6 +97,10 @@ const initScene = () => {
     ONE: -1,
     TWO: THREE.TOUCH.DOLLY_PAN
   }
+
+  // OrbitControls constructor sets touchAction='none' on the canvas — override it here
+  // so the browser allows vertical page scroll when the finger is not on a frame.
+  renderer.domElement.style.touchAction = 'pan-y'
 
   // Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
