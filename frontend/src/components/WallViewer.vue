@@ -97,10 +97,8 @@ const initScene = () => {
     ONE: -1,
     TWO: THREE.TOUCH.DOLLY_PAN
   }
-
-  // OrbitControls constructor sets touchAction='none' on the canvas — override it here
-  // so the browser allows vertical page scroll when the finger is not on a frame.
-  renderer.domElement.style.touchAction = 'pan-y'
+  // OrbitControls sets touch-action:none on the canvas, which is correct here.
+  // We implement manual page scroll below for non-frame touches.
 
   // Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
@@ -209,18 +207,34 @@ const onMouseUp = (event) => {
 }
 
 // --- Touch handling via pointer events ---
-// We use pointer events (not legacy touch events) because Three.js r152+ OrbitControls
-// uses pointerdown/setPointerCapture internally. Mouse pointer events are let through
-// (pointerType !== 'touch') so OrbitControls right-click rotate and scroll-zoom still work.
+// OrbitControls uses pointerdown → setPointerCapture internally, so we must intercept at
+// the container in capture phase. Mouse pointer events are let through (pointerType !== 'touch')
+// so OrbitControls right-click rotate and scroll-zoom still work on desktop.
+//
+// touch-action:none (set by OrbitControls) is kept intentionally — we implement page scroll
+// manually with window.scrollBy() + inertia so that frame drag never conflicts with scroll.
+
+let touchScrolling = false
+let touchScrollLastY = 0
+let touchScrollVelocity = 0
+let touchScrollAnimId = null
+
+const applyScrollMomentum = () => {
+  if (Math.abs(touchScrollVelocity) < 0.5) { touchScrollAnimId = null; return }
+  window.scrollBy(0, -touchScrollVelocity)
+  touchScrollVelocity *= 0.88
+  touchScrollAnimId = requestAnimationFrame(applyScrollMomentum)
+}
 
 const onTouchPointerDown = (event) => {
-  if (event.pointerType !== 'touch') return // let mouse reach OrbitControls normally
-  if (!event.isPrimary) return // only primary finger
+  if (event.pointerType !== 'touch') return
+  if (!event.isPrimary) return
 
-  // Stop propagation: OrbitControls on the canvas never sees this, never calls setPointerCapture
+  // Block OrbitControls from seeing this event (prevents setPointerCapture on the canvas)
   event.stopPropagation()
-
   if (!containerRef.value) return
+
+  if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
 
   const ndc = getMouseNDC(event)
   mouseDownPos = { x: event.clientX, y: event.clientY }
@@ -233,17 +247,23 @@ const onTouchPointerDown = (event) => {
   if (intersects.length > 0) {
     const frameGroup = findFrameGroup(intersects[0].object)
     if (frameGroup) {
-      event.preventDefault() // block scroll — finger is on a frame
       draggedFrame = frameGroup
       isDragging = false
+      touchScrolling = false
 
       const intersectPoint = new THREE.Vector3()
       raycaster.ray.intersectPlane(dragPlane, intersectPoint)
       dragOffset.copy(frameGroup.position).sub(intersectPoint)
 
       controls.enabled = false
+      return
     }
   }
+
+  // Finger is on the canvas background — set up manual page scroll
+  touchScrolling = true
+  touchScrollLastY = event.clientY
+  touchScrollVelocity = 0
 }
 
 const onTouchPointerMove = (event) => {
@@ -252,9 +272,15 @@ const onTouchPointerMove = (event) => {
 
   event.stopPropagation()
 
-  if (!draggedFrame || !containerRef.value) return
+  if (touchScrolling) {
+    const dy = event.clientY - touchScrollLastY
+    touchScrollVelocity = dy
+    window.scrollBy(0, -dy)
+    touchScrollLastY = event.clientY
+    return
+  }
 
-  event.preventDefault() // prevent scroll while dragging a frame
+  if (!draggedFrame || !containerRef.value) return
 
   const dx = event.clientX - mouseDownPos.x
   const dy = event.clientY - mouseDownPos.y
@@ -277,6 +303,13 @@ const onTouchPointerUp = (event) => {
   if (!event.isPrimary) return
 
   event.stopPropagation()
+
+  if (touchScrolling) {
+    touchScrolling = false
+    touchScrollAnimId = requestAnimationFrame(applyScrollMomentum)
+    return
+  }
+
   controls.enabled = true
 
   if (draggedFrame) {
@@ -302,6 +335,9 @@ const onTouchPointerUp = (event) => {
 const onTouchPointerCancel = (event) => {
   if (event.pointerType !== 'touch') return
   event.stopPropagation()
+  touchScrolling = false
+  touchScrollVelocity = 0
+  if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
   controls.enabled = true
   draggedFrame = null
   isDragging = false
@@ -555,6 +591,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   cancelAnimationFrame(animationId)
+  if (touchScrollAnimId) cancelAnimationFrame(touchScrollAnimId)
 
   frameObjects.forEach((obj) => {
     obj.traverse((child) => {
