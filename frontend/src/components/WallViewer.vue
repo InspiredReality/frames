@@ -69,10 +69,12 @@ const initScene = () => {
   // Allow vertical page scroll by default; preventDefault only when dragging a frame
   renderer.domElement.style.touchAction = 'pan-y'
 
-  // Add touch listeners for mobile frame dragging
-  renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false })
-  renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false })
-  renderer.domElement.addEventListener('touchend', onTouchEnd)
+  // Register in capture phase on the container so our handlers fire BEFORE OrbitControls'
+  // listeners on the canvas. We stopPropagation() to prevent OrbitControls from calling
+  // preventDefault() unconditionally (which would block the browser's native scroll).
+  containerRef.value.addEventListener('touchstart', onTouchStart, { passive: false, capture: true })
+  containerRef.value.addEventListener('touchmove', onTouchMove, { passive: false, capture: true })
+  containerRef.value.addEventListener('touchend', onTouchEnd, { capture: true })
 
   // Drag state
   dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
@@ -205,6 +207,9 @@ const onMouseUp = (event) => {
 const onTouchStart = (event) => {
   if (!containerRef.value) return
 
+  // Prevent OrbitControls on the canvas from receiving this event and calling preventDefault
+  event.stopPropagation()
+
   // Only handle single-finger touch for frame dragging
   if (event.touches.length !== 1) return
 
@@ -234,6 +239,9 @@ const onTouchStart = (event) => {
 }
 
 const onTouchMove = (event) => {
+  // Always stop propagation so OrbitControls can't call preventDefault on the canvas
+  event.stopPropagation()
+
   if (!draggedFrame || !containerRef.value) return
 
   // Only handle single-finger touch
@@ -260,7 +268,8 @@ const onTouchMove = (event) => {
   }
 }
 
-const onTouchEnd = () => {
+const onTouchEnd = (event) => {
+  if (event) event.stopPropagation()
   controls.enabled = true
 
   if (draggedFrame) {
@@ -554,9 +563,9 @@ onUnmounted(() => {
     renderer.domElement.removeEventListener('mousedown', onMouseDown)
     renderer.domElement.removeEventListener('mousemove', onMouseMove)
     renderer.domElement.removeEventListener('mouseup', onMouseUp)
-    renderer.domElement.removeEventListener('touchstart', onTouchStart)
-    renderer.domElement.removeEventListener('touchmove', onTouchMove)
-    renderer.domElement.removeEventListener('touchend', onTouchEnd)
+    containerRef.value?.removeEventListener('touchstart', onTouchStart, { capture: true })
+    containerRef.value?.removeEventListener('touchmove', onTouchMove, { capture: true })
+    containerRef.value?.removeEventListener('touchend', onTouchEnd, { capture: true })
     renderer.dispose()
     containerRef.value?.removeChild(renderer.domElement)
   }
