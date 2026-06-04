@@ -66,15 +66,19 @@ const initScene = () => {
   renderer.domElement.addEventListener('mousemove', onMouseMove)
   renderer.domElement.addEventListener('mouseup', onMouseUp)
 
-  // Allow vertical page scroll by default; preventDefault only when dragging a frame
+  // Three.js WebGLRenderer sets touch-action:none on the canvas; override so the browser
+  // can scroll vertically when the finger is NOT on a frame.
   renderer.domElement.style.touchAction = 'pan-y'
 
-  // Register in capture phase on the container so our handlers fire BEFORE OrbitControls'
-  // listeners on the canvas. We stopPropagation() to prevent OrbitControls from calling
-  // preventDefault() unconditionally (which would block the browser's native scroll).
-  containerRef.value.addEventListener('touchstart', onTouchStart, { passive: false, capture: true })
-  containerRef.value.addEventListener('touchmove', onTouchMove, { passive: false, capture: true })
-  containerRef.value.addEventListener('touchend', onTouchEnd, { capture: true })
+  // Three.js r152+ OrbitControls uses pointer events (pointerdown → setPointerCapture),
+  // not touch events. setPointerCapture redirects all input to the canvas and kills native
+  // scroll. We intercept in capture phase on the container so our handlers fire BEFORE
+  // OrbitControls. We stopPropagation() to prevent OrbitControls from seeing the event at
+  // all; only call preventDefault() when the finger lands on a frame.
+  containerRef.value.addEventListener('pointerdown', onTouchPointerDown, { passive: false, capture: true })
+  containerRef.value.addEventListener('pointermove', onTouchPointerMove, { passive: false, capture: true })
+  containerRef.value.addEventListener('pointerup', onTouchPointerUp, { capture: true })
+  containerRef.value.addEventListener('pointercancel', onTouchPointerCancel, { capture: true })
 
   // Drag state
   dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
@@ -204,18 +208,22 @@ const onMouseUp = (event) => {
   }
 }
 
-const onTouchStart = (event) => {
-  if (!containerRef.value) return
+// --- Touch handling via pointer events ---
+// We use pointer events (not legacy touch events) because Three.js r152+ OrbitControls
+// uses pointerdown/setPointerCapture internally. Mouse pointer events are let through
+// (pointerType !== 'touch') so OrbitControls right-click rotate and scroll-zoom still work.
 
-  // Prevent OrbitControls on the canvas from receiving this event and calling preventDefault
+const onTouchPointerDown = (event) => {
+  if (event.pointerType !== 'touch') return // let mouse reach OrbitControls normally
+  if (!event.isPrimary) return // only primary finger
+
+  // Stop propagation: OrbitControls on the canvas never sees this, never calls setPointerCapture
   event.stopPropagation()
 
-  // Only handle single-finger touch for frame dragging
-  if (event.touches.length !== 1) return
+  if (!containerRef.value) return
 
-  const touch = event.touches[0]
-  const ndc = getMouseNDC(touch)
-  mouseDownPos = { x: touch.clientX, y: touch.clientY }
+  const ndc = getMouseNDC(event)
+  mouseDownPos = { x: event.clientX, y: event.clientY }
   mouse.set(ndc.x, ndc.y)
   raycaster.setFromCamera(mouse, camera)
 
@@ -225,7 +233,7 @@ const onTouchStart = (event) => {
   if (intersects.length > 0) {
     const frameGroup = findFrameGroup(intersects[0].object)
     if (frameGroup) {
-      event.preventDefault() // Block page scroll — finger landed on a frame
+      event.preventDefault() // block scroll — finger is on a frame
       draggedFrame = frameGroup
       isDragging = false
 
@@ -238,26 +246,22 @@ const onTouchStart = (event) => {
   }
 }
 
-const onTouchMove = (event) => {
-  // Always stop propagation so OrbitControls can't call preventDefault on the canvas
+const onTouchPointerMove = (event) => {
+  if (event.pointerType !== 'touch') return
+  if (!event.isPrimary) return
+
   event.stopPropagation()
 
   if (!draggedFrame || !containerRef.value) return
 
-  // Only handle single-finger touch
-  if (event.touches.length !== 1) return
+  event.preventDefault() // prevent scroll while dragging a frame
 
-  event.preventDefault() // Prevent scrolling while dragging a frame
-
-  const touch = event.touches[0]
-
-  // Check if actually dragging (use slightly larger threshold for touch)
-  const dx = touch.clientX - mouseDownPos.x
-  const dy = touch.clientY - mouseDownPos.y
+  const dx = event.clientX - mouseDownPos.x
+  const dy = event.clientY - mouseDownPos.y
   if (!isDragging && Math.sqrt(dx * dx + dy * dy) < 5) return
   isDragging = true
 
-  const ndc = getMouseNDC(touch)
+  const ndc = getMouseNDC(event)
   mouse.set(ndc.x, ndc.y)
   raycaster.setFromCamera(mouse, camera)
 
@@ -268,8 +272,11 @@ const onTouchMove = (event) => {
   }
 }
 
-const onTouchEnd = (event) => {
-  if (event) event.stopPropagation()
+const onTouchPointerUp = (event) => {
+  if (event.pointerType !== 'touch') return
+  if (!event.isPrimary) return
+
+  event.stopPropagation()
   controls.enabled = true
 
   if (draggedFrame) {
@@ -282,7 +289,6 @@ const onTouchEnd = (event) => {
         }
       })
     } else {
-      // Was a tap, not a drag - select the frame
       emit('frameSelected', {
         frameId: draggedFrame.userData.frameId,
         placementIndex: draggedFrame.userData.placementIndex
@@ -291,6 +297,14 @@ const onTouchEnd = (event) => {
     draggedFrame = null
     isDragging = false
   }
+}
+
+const onTouchPointerCancel = (event) => {
+  if (event.pointerType !== 'touch') return
+  event.stopPropagation()
+  controls.enabled = true
+  draggedFrame = null
+  isDragging = false
 }
 
 const createWall = () => {
@@ -563,9 +577,10 @@ onUnmounted(() => {
     renderer.domElement.removeEventListener('mousedown', onMouseDown)
     renderer.domElement.removeEventListener('mousemove', onMouseMove)
     renderer.domElement.removeEventListener('mouseup', onMouseUp)
-    containerRef.value?.removeEventListener('touchstart', onTouchStart, { capture: true })
-    containerRef.value?.removeEventListener('touchmove', onTouchMove, { capture: true })
-    containerRef.value?.removeEventListener('touchend', onTouchEnd, { capture: true })
+    containerRef.value?.removeEventListener('pointerdown', onTouchPointerDown, { capture: true })
+    containerRef.value?.removeEventListener('pointermove', onTouchPointerMove, { capture: true })
+    containerRef.value?.removeEventListener('pointerup', onTouchPointerUp, { capture: true })
+    containerRef.value?.removeEventListener('pointercancel', onTouchPointerCancel, { capture: true })
     renderer.dispose()
     containerRef.value?.removeChild(renderer.domElement)
   }
