@@ -33,6 +33,10 @@ const filteredItems = computed(() => {
 
 const getImageUrl = (path) => getUploadUrl(path)
 
+const navigateToWall = (wall) => {
+  router.push(`/wall/${wall.id}`)
+}
+
 const getFrameDimensions = (picture) => {
   const frame = picture.frames?.[0]
   if (!frame) return {}
@@ -47,13 +51,25 @@ const getFrameDimensions = (picture) => {
 
 <template>
   <div class="max-w-5xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h1 class="text-2xl font-bold">Public Gallery</h1>
-        <p class="text-gray-400 text-sm">Walls and frames shared by the community</p>
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold whitespace-nowrap">Public Gallery</h1>
+      <p class="text-gray-400 text-sm">Walls and frames shared by the community</p>
+    </div>
+
+    <!-- Guest capture strip -->
+    <div class="flex flex-col gap-3 mb-6 p-3 bg-dark-300 rounded-lg border border-gray-700">
+      <span class="text-sm text-gray-400">Try it free — no account needed:</span>
+      <div class="flex gap-2">
+        <router-link to="/capture/wall" class="btn btn-secondary text-sm py-1.5 px-3">
+          Capture Wall
+        </router-link>
+        <router-link to="/capture/frame" class="btn btn-secondary text-sm py-1.5 px-3">
+          Capture Frame
+        </router-link>
       </div>
-      <div class="flex gap-3">
-        <router-link to="/register" class="btn btn-primary">
+      <p class="text-sm text-gray-400">Create account to save private Walls &amp; Frames.</p>
+      <div class="flex gap-2">
+        <router-link to="/register" class="btn btn-primary text-sm py-1.5 px-3">
           Create Account
         </router-link>
         <router-link to="/login" class="btn btn-secondary">
@@ -108,7 +124,8 @@ const getFrameDimensions = (picture) => {
           <div
             v-for="wall in filteredItems.walls"
             :key="wall.id"
-            class="card p-3 border border-transparent hover:border-primary-500/50 transition-colors"
+            @click="navigateToWall(wall)"
+            class="card p-3 border border-transparent hover:border-primary-500/50 transition-colors cursor-pointer"
           >
             <div class="aspect-video bg-dark-300 rounded-lg overflow-hidden mb-3">
               <img
@@ -181,5 +198,6 @@ const getFrameDimensions = (picture) => {
         </router-link>
       </div>
     </div>
+
   </div>
 </template>

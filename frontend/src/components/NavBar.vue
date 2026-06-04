@@ -46,6 +46,12 @@ const logout = () => {
             </button>
           </template>
           <template v-else>
+            <router-link to="/capture/wall" class="text-gray-300 hover:text-white transition">
+              Capture Wall
+            </router-link>
+            <router-link to="/capture/frame" class="text-gray-300 hover:text-white transition">
+              Capture Frame
+            </router-link>
             <router-link to="/public-gallery" class="text-gray-300 hover:text-white transition">
               Public Gallery
             </router-link>
@@ -87,6 +93,12 @@ const logout = () => {
           </button>
         </template>
         <template v-else>
+          <router-link to="/capture/wall" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
+            Capture Wall
+          </router-link>
+          <router-link to="/capture/frame" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
+            Capture Frame
+          </router-link>
           <router-link to="/public-gallery" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
             Public Gallery
           </router-link>

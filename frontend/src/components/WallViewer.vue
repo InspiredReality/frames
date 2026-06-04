@@ -6,6 +6,10 @@ import { getUploadUrl } from '@/services/api'
 
 const props = defineProps({
   wallImageUrl: String,
+  wallBackgroundColor: {
+    type: String,
+    default: null
+  },
   wallWidthCm: {
     type: Number,
     default: 0
@@ -62,10 +66,15 @@ const initScene = () => {
   renderer.domElement.addEventListener('mousemove', onMouseMove)
   renderer.domElement.addEventListener('mouseup', onMouseUp)
 
-  // Add touch listeners for mobile frame dragging
-  renderer.domElement.addEventListener('touchstart', onTouchStart)
-  renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false })
-  renderer.domElement.addEventListener('touchend', onTouchEnd)
+  // Three.js r152+ OrbitControls uses pointer events (pointerdown → setPointerCapture),
+  // not touch events. setPointerCapture redirects all input to the canvas and kills native
+  // scroll. We intercept in capture phase on the container so our handlers fire BEFORE
+  // OrbitControls. We stopPropagation() to prevent OrbitControls from seeing the event at
+  // all; only call preventDefault() when the finger lands on a frame.
+  containerRef.value.addEventListener('pointerdown', onTouchPointerDown, { passive: false, capture: true })
+  containerRef.value.addEventListener('pointermove', onTouchPointerMove, { passive: false, capture: true })
+  containerRef.value.addEventListener('pointerup', onTouchPointerUp, { capture: true })
+  containerRef.value.addEventListener('pointercancel', onTouchPointerCancel, { capture: true })
 
   // Drag state
   dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
@@ -88,6 +97,8 @@ const initScene = () => {
     ONE: -1,
     TWO: THREE.TOUCH.DOLLY_PAN
   }
+  // OrbitControls sets touch-action:none on the canvas, which is correct here.
+  // We implement manual page scroll below for non-frame touches.
 
   // Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
@@ -195,15 +206,56 @@ const onMouseUp = (event) => {
   }
 }
 
-const onTouchStart = (event) => {
+// --- Touch handling via pointer events ---
+// OrbitControls uses pointerdown → setPointerCapture internally, so we must intercept at
+// the container in capture phase. Mouse pointer events are let through (pointerType !== 'touch')
+// so OrbitControls right-click rotate and scroll-zoom still work on desktop.
+//
+// touch-action:none (set by OrbitControls) is kept — we implement page scroll manually with
+// window.scrollBy() + inertia. Two-finger events are NOT stopped; OrbitControls sees both
+// pointers and handles pinch zoom normally.
+
+let touchScrolling = false
+let touchScrollLastY = 0
+let touchScrollVelocity = 0
+let touchScrollAnimId = null
+const activeTouchPointers = new Set() // tracks all active touch pointerIds
+let singleTouchPointerId = null       // pointerId we treat as the single-finger
+
+const applyScrollMomentum = () => {
+  if (Math.abs(touchScrollVelocity) < 0.5) { touchScrollAnimId = null; return }
+  window.scrollBy(0, -touchScrollVelocity)
+  touchScrollVelocity *= 0.88
+  touchScrollAnimId = requestAnimationFrame(applyScrollMomentum)
+}
+
+const onTouchPointerDown = (event) => {
+  if (event.pointerType !== 'touch') return
+
+  activeTouchPointers.add(event.pointerId)
+
+  if (activeTouchPointers.size > 1) {
+    // Second finger arrived — hand off to OrbitControls for pinch zoom.
+    // Cancel any in-progress single-finger operation.
+    touchScrolling = false
+    touchScrollVelocity = 0
+    if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
+    if (draggedFrame) { draggedFrame = null; isDragging = false; }
+    controls.enabled = true
+    singleTouchPointerId = null
+    // Do NOT stopPropagation — OrbitControls must see this (and the earlier first finger) to
+    // initiate its two-finger DOLLY_PAN state.
+    return
+  }
+
+  // Single finger — our handler owns this gesture
+  singleTouchPointerId = event.pointerId
   if (!containerRef.value) return
 
-  // Only handle single-finger touch for frame dragging
-  if (event.touches.length !== 1) return
+  if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
 
-  const touch = event.touches[0]
-  const ndc = getMouseNDC(touch)
-  mouseDownPos = { x: touch.clientX, y: touch.clientY }
+  const ndc = getMouseNDC(event)
+  mouseDownPos = { x: event.clientX, y: event.clientY }
   mouse.set(ndc.x, ndc.y)
   raycaster.setFromCamera(mouse, camera)
 
@@ -215,33 +267,44 @@ const onTouchStart = (event) => {
     if (frameGroup) {
       draggedFrame = frameGroup
       isDragging = false
+      touchScrolling = false
 
       const intersectPoint = new THREE.Vector3()
       raycaster.ray.intersectPlane(dragPlane, intersectPoint)
       dragOffset.copy(frameGroup.position).sub(intersectPoint)
 
       controls.enabled = false
+      return
     }
   }
+
+  // Finger is on the canvas background — manual page scroll
+  touchScrolling = true
+  touchScrollLastY = event.clientY
+  touchScrollVelocity = 0
 }
 
-const onTouchMove = (event) => {
+const onTouchPointerMove = (event) => {
+  if (event.pointerType !== 'touch') return
+  // Ignore any pointer that isn't our tracked single-finger (incl. two-finger moves)
+  if (event.pointerId !== singleTouchPointerId) return
+
+  if (touchScrolling) {
+    const dy = event.clientY - touchScrollLastY
+    touchScrollVelocity = dy
+    window.scrollBy(0, -dy)
+    touchScrollLastY = event.clientY
+    return
+  }
+
   if (!draggedFrame || !containerRef.value) return
 
-  // Only handle single-finger touch
-  if (event.touches.length !== 1) return
-
-  event.preventDefault() // Prevent scrolling while dragging a frame
-
-  const touch = event.touches[0]
-
-  // Check if actually dragging (use slightly larger threshold for touch)
-  const dx = touch.clientX - mouseDownPos.x
-  const dy = touch.clientY - mouseDownPos.y
+  const dx = event.clientX - mouseDownPos.x
+  const dy = event.clientY - mouseDownPos.y
   if (!isDragging && Math.sqrt(dx * dx + dy * dy) < 5) return
   isDragging = true
 
-  const ndc = getMouseNDC(touch)
+  const ndc = getMouseNDC(event)
   mouse.set(ndc.x, ndc.y)
   raycaster.setFromCamera(mouse, camera)
 
@@ -252,7 +315,25 @@ const onTouchMove = (event) => {
   }
 }
 
-const onTouchEnd = () => {
+const onTouchPointerUp = (event) => {
+  if (event.pointerType !== 'touch') return
+
+  activeTouchPointers.delete(event.pointerId)
+
+  if (event.pointerId !== singleTouchPointerId) {
+    // A non-single-touch finger lifted; re-enable controls when all fingers are gone
+    if (activeTouchPointers.size === 0) { controls.enabled = true; singleTouchPointerId = null }
+    return
+  }
+
+  singleTouchPointerId = null
+
+  if (touchScrolling) {
+    touchScrolling = false
+    touchScrollAnimId = requestAnimationFrame(applyScrollMomentum)
+    return
+  }
+
   controls.enabled = true
 
   if (draggedFrame) {
@@ -265,7 +346,6 @@ const onTouchEnd = () => {
         }
       })
     } else {
-      // Was a tap, not a drag - select the frame
       emit('frameSelected', {
         frameId: draggedFrame.userData.frameId,
         placementIndex: draggedFrame.userData.placementIndex
@@ -273,6 +353,20 @@ const onTouchEnd = () => {
     }
     draggedFrame = null
     isDragging = false
+  }
+}
+
+const onTouchPointerCancel = (event) => {
+  if (event.pointerType !== 'touch') return
+  activeTouchPointers.delete(event.pointerId)
+  if (activeTouchPointers.size === 0) {
+    touchScrolling = false
+    touchScrollVelocity = 0
+    if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
+    controls.enabled = true
+    draggedFrame = null
+    isDragging = false
+    singleTouchPointerId = null
   }
 }
 
@@ -303,8 +397,11 @@ const createWall = () => {
       side: THREE.DoubleSide
     })
   } else {
+    const fallbackColor = props.wallBackgroundColor
+      ? new THREE.Color(props.wallBackgroundColor)
+      : new THREE.Color(0xe0e0e0)
     material = new THREE.MeshStandardMaterial({
-      color: 0xe0e0e0,
+      color: fallbackColor,
       side: THREE.DoubleSide
     })
   }
@@ -362,17 +459,29 @@ const updateFrames = () => {
   })
   frameObjects.clear()
 
-  // Sort placements largest-area-first so smaller frames get a higher z (closer to camera)
+  // Sort by explicit zOrder if present, otherwise largest-area-first
   const sortedPlacements = props.framePlacements
     .map((placement, index) => {
-      const frame = props.frames.find(f => f.id === placement.frame_id)
+      const frame = placement.frame_id
+        ? props.frames.find(f => f.id === placement.frame_id)
+        : placement.picture_id
+          ? props.frames.find(f => f.pictureId === placement.picture_id)
+          : null
       const dims = frame?.dimensions?.cm || { width: 20, height: 25 }
       return { placement, originalIndex: index, area: dims.width * dims.height }
     })
-    .sort((a, b) => b.area - a.area)
+    .sort((a, b) =>
+      a.placement.zOrder !== undefined && b.placement.zOrder !== undefined
+        ? a.placement.zOrder - b.placement.zOrder
+        : b.area - a.area
+    )
 
   sortedPlacements.forEach(({ placement, originalIndex }, sortedIndex) => {
-    const frame = props.frames.find(f => f.id === placement.frame_id)
+    const frame = placement.frame_id
+      ? props.frames.find(f => f.id === placement.frame_id)
+      : placement.picture_id
+        ? props.frames.find(f => f.pictureId === placement.picture_id)
+        : null
     if (!frame) return
     if (placement.visible === false) return
 
@@ -385,7 +494,7 @@ const updateFrames = () => {
 
     // Create a group to hold frame parts
     const frameGroup = new THREE.Group()
-    frameGroup.userData = { frameId: frame.id, placementIndex: originalIndex }
+    frameGroup.userData = { frameId: frame.id ?? `picture_${frame.pictureId ?? originalIndex}`, placementIndex: originalIndex }
 
     // Frame color
     const frameColor = new THREE.Color(frame.styling?.frame_color || '#8B4513')
@@ -395,12 +504,16 @@ const updateFrames = () => {
     const pictureHeight = frameHeight - borderWidth * 2
     const pictureGeometry = new THREE.PlaneGeometry(pictureWidth, pictureHeight)
 
-    // Load the image texture - use same synchronous pattern as wall texture
-    const imageUrl = frame.pictureImage ? getUploadUrl(frame.pictureImage) : null
+    const imageUrl = frame.pictureImage
+      ? (frame.pictureImage.startsWith('data:') || frame.pictureImage.startsWith('blob:')
+          ? frame.pictureImage
+          : getUploadUrl(frame.pictureImage))
+      : null
     let pictureMaterial
 
     if (imageUrl) {
-      const texture = textureLoader.load(imageUrl)
+      const loader = new THREE.TextureLoader()
+      const texture = loader.load(imageUrl)
       texture.colorSpace = THREE.SRGBColorSpace
       pictureMaterial = new THREE.MeshStandardMaterial({
         map: texture,
@@ -483,6 +596,7 @@ const handleResize = () => {
 }
 
 watch(() => props.wallImageUrl, createWall)
+watch(() => props.wallBackgroundColor, createWall)
 watch(() => props.wallWidthCm, createWall)
 watch(() => props.wallHeightCm, createWall)
 watch(() => props.framePlacements, updateFrames, { deep: true })
@@ -504,6 +618,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   cancelAnimationFrame(animationId)
+  if (touchScrollAnimId) cancelAnimationFrame(touchScrollAnimId)
 
   frameObjects.forEach((obj) => {
     obj.traverse((child) => {
@@ -526,9 +641,10 @@ onUnmounted(() => {
     renderer.domElement.removeEventListener('mousedown', onMouseDown)
     renderer.domElement.removeEventListener('mousemove', onMouseMove)
     renderer.domElement.removeEventListener('mouseup', onMouseUp)
-    renderer.domElement.removeEventListener('touchstart', onTouchStart)
-    renderer.domElement.removeEventListener('touchmove', onTouchMove)
-    renderer.domElement.removeEventListener('touchend', onTouchEnd)
+    containerRef.value?.removeEventListener('pointerdown', onTouchPointerDown, { capture: true })
+    containerRef.value?.removeEventListener('pointermove', onTouchPointerMove, { capture: true })
+    containerRef.value?.removeEventListener('pointerup', onTouchPointerUp, { capture: true })
+    containerRef.value?.removeEventListener('pointercancel', onTouchPointerCancel, { capture: true })
     renderer.dispose()
     containerRef.value?.removeChild(renderer.domElement)
   }
@@ -537,5 +653,5 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="viewer-container w-full h-96 rounded-lg overflow-hidden"></div>
+  <div ref="containerRef" class="viewer-container w-full h-full rounded-lg overflow-hidden"></div>
 </template>

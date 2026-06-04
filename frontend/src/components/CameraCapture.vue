@@ -1,6 +1,13 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
+const props = defineProps({
+  defaultZoom: {
+    type: Number,
+    default: null
+  }
+})
+
 const emit = defineEmits(['capture', 'error'])
 
 const videoRef = ref(null)
@@ -9,6 +16,21 @@ const fileInputRef = ref(null)
 const stream = ref(null)
 const isReady = ref(false)
 const facingMode = ref('environment') // 'user' or 'environment'
+let autoCaptureId = null
+
+const applyZoom = async (target) => {
+  if (target === null || !stream.value) return
+  try {
+    const track = stream.value.getVideoTracks()[0]
+    if (!track || typeof track.getCapabilities !== 'function') return
+    const caps = track.getCapabilities()
+    if (!caps?.zoom) return
+    const clamped = Math.max(caps.zoom.min, Math.min(caps.zoom.max, target))
+    await track.applyConstraints({ advanced: [{ zoom: clamped }] })
+  } catch {
+    // zoom not supported on this device/browser — silently ignore
+  }
+}
 
 const startCamera = async () => {
   try {
@@ -19,8 +41,8 @@ const startCamera = async () => {
     stream.value = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: facingMode.value,
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
+        width: { ideal: 1080 },
+        height: { ideal: 1920 }
       }
     })
 
@@ -28,6 +50,7 @@ const startCamera = async () => {
       videoRef.value.srcObject = stream.value
       await videoRef.value.play()
       isReady.value = true
+      await applyZoom(props.defaultZoom)
     }
   } catch (error) {
     console.error('Camera access error:', error)
@@ -75,7 +98,6 @@ const handleFileUpload = (event) => {
   reader.onload = (e) => {
     const img = new Image()
     img.onload = () => {
-      // Create a canvas to get the blob
       const canvas = canvasRef.value
       const ctx = canvas.getContext('2d')
       canvas.width = img.width
@@ -97,8 +119,21 @@ const handleFileUpload = (event) => {
   }
   reader.readAsDataURL(file)
 
-  // Reset input so the same file can be selected again
   event.target.value = ''
+}
+
+const startAutoCapture = (intervalMs = 800) => {
+  stopAutoCapture()
+  autoCaptureId = setInterval(() => {
+    if (isReady.value) capturePhoto()
+  }, intervalMs)
+}
+
+const stopAutoCapture = () => {
+  if (autoCaptureId !== null) {
+    clearInterval(autoCaptureId)
+    autoCaptureId = null
+  }
 }
 
 onMounted(() => {
@@ -109,9 +144,10 @@ onUnmounted(() => {
   if (stream.value) {
     stream.value.getTracks().forEach(track => track.stop())
   }
+  stopAutoCapture()
 })
 
-defineExpose({ capturePhoto, switchCamera, triggerUpload })
+defineExpose({ capturePhoto, switchCamera, triggerUpload, startAutoCapture, stopAutoCapture })
 </script>
 
 <template>

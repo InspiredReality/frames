@@ -6,6 +6,7 @@ import FramePreview2D from '@/components/FramePreview2D.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
+import { useAuthStore } from '@/store/auth'
 import { getUploadUrl } from '@/services/api'
 import api from '@/services/api'
 
@@ -13,12 +14,14 @@ const route = useRoute()
 const router = useRouter()
 const wallsStore = useWallsStore()
 const picturesStore = usePicturesStore()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
 const saveError = ref('')
 const showFramePicker = ref(false)
+const pickerTab = ref('my') // 'my' or 'public'
 const wallViewerRef = ref(null)
 
 // Frame editing state
@@ -66,9 +69,12 @@ const effectiveAspectRatio = computed(() => {
   return lockAspectRatio.value ? recropAspectRatio.value : null
 })
 
+const showSaveLayoutModal = ref(false)
+const layoutName = ref('')
+
 // Lock body scroll when any modal is open (prevents background scrolling on mobile)
 const isAnyModalOpen = computed(() => {
-  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value || showWallRecropModal.value)
+  return !!(showFramePicker.value || selectedPlacementIndex.value !== null || showRecropModal.value || showWallRecropModal.value || showSaveLayoutModal.value)
 })
 
 watch(isAnyModalOpen, (open) => {
@@ -76,13 +82,27 @@ watch(isAnyModalOpen, (open) => {
 })
 
 onMounted(async () => {
+  if (!authStore.isAuthenticated) {
+    pickerTab.value = 'public'
+  }
   try {
+    const fetchOwn = authStore.isAuthenticated ? picturesStore.fetchPictures() : Promise.resolve()
     await Promise.all([
       wallsStore.fetchWall(parseInt(route.params.id)),
-      picturesStore.fetchPictures()
+      fetchOwn,
+      picturesStore.fetchPublicPictures()
     ])
+    if (!wallsStore.currentWall) {
+      error.value = 'Wall not found'
+    }
   } catch (err) {
-    error.value = 'Failed to load wall'
+    if (err.response?.status === 404) {
+      error.value = 'Wall not found'
+    } else if (err.response?.status === 403) {
+      error.value = 'This wall is private'
+    } else {
+      error.value = 'Failed to load wall'
+    }
   } finally {
     loading.value = false
   }
@@ -93,38 +113,87 @@ onUnmounted(() => {
 })
 
 const wall = computed(() => wallsStore.currentWall)
+const isOwner = computed(() =>
+  authStore.isAuthenticated && authStore.user?.id === wall.value?.user_id
+)
 
 const allFrames = computed(() => {
   const frames = []
-  picturesStore.pictures.forEach(picture => {
-    if (picture.frames) {
+  const seenPictureIds = new Set()
+
+  const addFromPicture = (picture, isPublic) => {
+    if (seenPictureIds.has(picture.id)) return
+    seenPictureIds.add(picture.id)
+    if (picture.frames && picture.frames.length > 0) {
       picture.frames.forEach(frame => {
         frames.push({
           ...frame,
           pictureName: picture.name,
-          pictureImage: picture.thumbnail_path || picture.image_path
+          pictureImage: picture.thumbnail_path || picture.image_path,
+          isPublic
         })
       })
+    } else {
+      frames.push({
+        id: null,
+        pictureId: picture.id,
+        pictureName: picture.name,
+        pictureImage: picture.thumbnail_path || picture.image_path,
+        dimensions: { cm: { width: 20, height: 25, depth: 2 } },
+        styling: { frame_color: '#8B4513', frame_thickness: 1 },
+        isPublic
+      })
     }
-  })
+  }
+
+  if (authStore.isAuthenticated) {
+    picturesStore.pictures.forEach(p => addFromPicture(p, false))
+  }
+  picturesStore.publicPictures.forEach(p => addFromPicture(p, true))
+
   return frames
 })
 
+const findFrameForPlacement = (placement) => {
+  return allFrames.value.find(f =>
+    placement.frame_id
+      ? f.id === placement.frame_id
+      : (placement.picture_id && f.pictureId === placement.picture_id)
+  ) || null
+}
+
 // Frames available to add (not already placed on this wall)
+const _placedIds = computed(() => ({
+  frameIds: new Set((wall.value?.frame_placements || []).map(p => p.frame_id).filter(Boolean)),
+  pictureIds: new Set((wall.value?.frame_placements || []).map(p => p.picture_id).filter(Boolean))
+}))
+
+const _isNotPlaced = (frame) => {
+  return frame.pictureId
+    ? !_placedIds.value.pictureIds.has(frame.pictureId)
+    : !_placedIds.value.frameIds.has(frame.id)
+}
+
+const availableMyFrames = computed(() =>
+  allFrames.value.filter(f => !f.isPublic && _isNotPlaced(f))
+)
+
+const availablePublicFrames = computed(() =>
+  allFrames.value.filter(f => f.isPublic && _isNotPlaced(f))
+)
+
 const availableFrames = computed(() => {
-  const placedFrameIds = (wall.value?.frame_placements || []).map(p => p.frame_id)
-  return allFrames.value.filter(frame => !placedFrameIds.includes(frame.id))
+  if (!authStore.isAuthenticated) return availablePublicFrames.value
+  return pickerTab.value === 'my' ? availableMyFrames.value : availablePublicFrames.value
 })
 
 const addFrame = async (frame) => {
   try {
     saving.value = true
-    await wallsStore.addFramePlacement(wall.value.id, {
-      frame_id: frame.id,
-      position: { x: 0, y: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: 1.0
-    })
+    const placement = frame.pictureId
+      ? { picture_id: frame.pictureId, position: { x: 0, y: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1.0 }
+      : { frame_id: frame.id, position: { x: 0, y: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1.0 }
+    await wallsStore.addFramePlacement(wall.value.id, placement)
     showFramePicker.value = false
   } catch (err) {
     error.value = 'Failed to add frame'
@@ -165,14 +234,20 @@ const toggleFrameVisibility = async (placementIndex) => {
 
 const savedLayouts = computed(() => wall.value?.scene_config?.layouts || [])
 
+const openSaveLayoutModal = () => {
+  layoutName.value = `Layout ${savedLayouts.value.length + 1}`
+  showSaveLayoutModal.value = true
+}
+
 const saveLayout = async () => {
+  showSaveLayoutModal.value = false
   try {
     saving.value = true
     const thumbnail = wallViewerRef.value?.captureScreenshot() || null
     const layouts = JSON.parse(JSON.stringify(wall.value?.scene_config?.layouts || []))
     layouts.push({
       id: Date.now().toString(),
-      name: `Layout ${layouts.length + 1}`,
+      name: layoutName.value.trim() || `Layout ${layouts.length + 1}`,
       created_at: new Date().toISOString(),
       frame_placements: JSON.parse(JSON.stringify(wall.value.frame_placements || [])),
       width_cm: wall.value.width_cm,
@@ -213,14 +288,16 @@ const selectedPlacement = computed(() => {
 
 const selectedFrame = computed(() => {
   if (!selectedPlacement.value) return null
-  return allFrames.value.find(f => f.id === selectedPlacement.value.frame_id) || null
+  return findFrameForPlacement(selectedPlacement.value)
 })
 
 // Get the picture for the selected frame
 const selectedPicture = computed(() => {
   if (!selectedFrame.value) return null
-  return picturesStore.pictures.find(p =>
-    p.frames?.some(f => f.id === selectedFrame.value.id)
+  const allPictures = [...picturesStore.pictures, ...picturesStore.publicPictures]
+  return allPictures.find(p =>
+    (selectedFrame.value.id && p.frames?.some(f => f.id === selectedFrame.value.id)) ||
+    (selectedFrame.value.pictureId && p.id === selectedFrame.value.pictureId)
   ) || null
 })
 
@@ -429,6 +506,11 @@ const cmToFtIn = (cm) => {
   const ft = Math.floor(totalInches / 12)
   const inches = +(totalInches - ft * 12).toFixed(1)
   return { ft, inches }
+}
+
+const fmtFtIn = (cm) => {
+  const { ft, inches } = cmToFtIn(cm)
+  return inches === 0 ? `${ft}'` : `${ft}' ${inches}"`
 }
 
 const ftInToCm = (ft, inches) => {
@@ -707,7 +789,7 @@ const saveRecrop = async () => {
 const closeFrameEditor = () => {
   selectedPlacementIndex.value = null
   editingFrameDimensions.value = false
-  editingFrameColor.value = false
+  showCustomColorPicker.value = false
   showRecropModal.value = false
   saveError.value = ''
 }
@@ -752,11 +834,25 @@ const getFrameDimensions = (frame) => {
     <!-- Error -->
     <div v-else-if="error" class="text-center py-12">
       <p class="text-red-400 mb-4">{{ error }}</p>
-      <button @click="router.back()" class="btn btn-secondary">Go Back</button>
+      <div class="flex gap-3 justify-center">
+        <button @click="router.back()" class="btn btn-secondary">Go Back</button>
+        <router-link to="/public-gallery" class="btn btn-secondary">Public Gallery</router-link>
+      </div>
     </div>
 
     <!-- Editor -->
     <div v-else-if="wall">
+      <!-- Guest / public-viewer banner -->
+      <div v-if="!authStore.isAuthenticated" class="mb-4 p-3 bg-primary-900/40 border border-primary-600 rounded-lg text-sm text-primary-300 flex items-start gap-2">
+        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>
+          You're viewing as a guest — add frames, rearrange, and save layouts freely.
+          <router-link to="/register" class="underline hover:text-white ml-1">Create an account</router-link> to keep your walls private.
+        </span>
+      </div>
+
       <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-2xl font-bold">{{ wall.name }}</h1>
@@ -766,7 +862,7 @@ const getFrameDimensions = (frame) => {
           <button @click="showFramePicker = true" class="btn btn-primary">
             Add Frame
           </button>
-          <router-link :to="`/ar/${wall.id}`" class="btn btn-secondary">
+          <router-link v-if="authStore.isAuthenticated" :to="`/ar/${wall.id}`" class="btn btn-secondary">
             AR View
           </router-link>
         </div>
@@ -774,20 +870,23 @@ const getFrameDimensions = (frame) => {
 
       <!-- 3D Wall Viewer -->
       <div class="card mb-6">
-        <WallViewer
-          ref="wallViewerRef"
-          :wallImageUrl="getImageUrl(wall.image_path)"
-          :wallWidthCm="wall.width_cm || 0"
-          :wallHeightCm="wall.height_cm || 0"
-          :framePlacements="wall.frame_placements || []"
-          :frames="allFrames"
-          @frameSelected="selectFrame"
-          @frameMoved="onFrameMoved"
-        />
+        <div class="h-96">
+          <WallViewer
+            ref="wallViewerRef"
+            :wallImageUrl="wall.image_path ? getImageUrl(wall.image_path) : null"
+            :wallBackgroundColor="wall.background_color || null"
+            :wallWidthCm="wall.width_cm || 0"
+            :wallHeightCm="wall.height_cm || 0"
+            :framePlacements="wall.frame_placements || []"
+            :frames="allFrames"
+            @frameSelected="selectFrame"
+            @frameMoved="onFrameMoved"
+          />
+        </div>
         <p class="text-xs text-gray-500 mt-2 text-center">Left-click and drag frames to move them. Right-click and drag to rotate the view.</p>
         <div class="mt-3 flex justify-center">
           <button
-            @click="saveLayout"
+            @click="openSaveLayoutModal"
             :disabled="saving"
             class="btn btn-secondary text-sm"
           >
@@ -805,8 +904,8 @@ const getFrameDimensions = (frame) => {
               <p v-if="wall.description" class="text-sm text-gray-400 mt-1">{{ wall.description }}</p>
               <p class="text-sm text-gray-400 mt-1">
                 <template v-if="wall.width_cm && wall.height_cm">
-                  {{ wall.width_cm.toFixed(1) }} x {{ wall.height_cm.toFixed(1) }} cm
-                  ({{ (wall.width_cm / 2.54).toFixed(1) }}" x {{ (wall.height_cm / 2.54).toFixed(1) }}")
+                  {{ fmtFtIn(wall.width_cm) }} x {{ fmtFtIn(wall.height_cm) }}
+                  ({{ wall.width_cm.toFixed(1) }} x {{ wall.height_cm.toFixed(1) }} cm)
                 </template>
                 <template v-else>
                   8 ft × 8 ft (default)
@@ -815,7 +914,7 @@ const getFrameDimensions = (frame) => {
             </template>
           </div>
           <button
-            v-if="!editingWall"
+            v-if="!editingWall && isOwner"
             @click="startEditWall"
             class="btn btn-secondary text-sm"
           >
@@ -1003,14 +1102,14 @@ const getFrameDimensions = (frame) => {
             <div class="flex items-center gap-3">
               <div class="w-12 h-12 bg-dark-100 rounded overflow-hidden flex-shrink-0">
                 <img
-                  v-if="allFrames.find(f => f.id === placement.frame_id)?.pictureImage"
-                  :src="getImageUrl(allFrames.find(f => f.id === placement.frame_id).pictureImage)"
+                  v-if="findFrameForPlacement(placement)?.pictureImage"
+                  :src="getImageUrl(findFrameForPlacement(placement).pictureImage)"
                   class="w-full h-full object-cover"
                 />
               </div>
               <div>
                 <p class="font-medium">
-                  {{ allFrames.find(f => f.id === placement.frame_id)?.pictureName || 'Unknown' }}
+                  {{ findFrameForPlacement(placement)?.pictureName || 'Unknown' }}
                 </p>
                 <p class="text-sm text-gray-400">
                   {{ formatPlacementPosition(placement) }}
@@ -1074,6 +1173,15 @@ const getFrameDimensions = (frame) => {
       </div>
     </div>
 
+    <!-- Fallback: wall is null after loading -->
+    <div v-else class="text-center py-12">
+      <p class="text-gray-400 mb-4">Wall not found or not accessible.</p>
+      <div class="flex gap-3 justify-center">
+        <button @click="router.back()" class="btn btn-secondary">Go Back</button>
+        <router-link to="/public-gallery" class="btn btn-secondary">Public Gallery</router-link>
+      </div>
+    </div>
+
     <!-- Frame picker modal -->
     <div
       v-if="showFramePicker"
@@ -1090,13 +1198,44 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
 
+        <!-- My Frames / Public tabs (authenticated only) -->
+        <div v-if="authStore.isAuthenticated" class="flex gap-2 mb-4">
+          <button
+            @click="pickerTab = 'my'"
+            class="px-3 py-1.5 rounded-lg text-sm transition"
+            :class="pickerTab === 'my' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
+          >
+            My Frames ({{ availableMyFrames.length }})
+          </button>
+          <button
+            @click="pickerTab = 'public'"
+            class="px-3 py-1.5 rounded-lg text-sm transition"
+            :class="pickerTab === 'public' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400 hover:text-white'"
+          >
+            Public ({{ availablePublicFrames.length }})
+          </button>
+        </div>
+
         <div v-if="availableFrames.length === 0" class="text-center py-6">
           <p class="text-gray-400 mb-4">
-            {{ allFrames.length === 0 ? 'No frames available. Add some frames first.' : 'All frames are already placed on this wall.' }}
+            <template v-if="!authStore.isAuthenticated">
+              No public frames available yet. Capture a frame to add it here.
+            </template>
+            <template v-else-if="pickerTab === 'my' && availableMyFrames.length === 0">
+              No personal frames available. Capture a frame first.
+            </template>
+            <template v-else>
+              All frames are already placed on this wall.
+            </template>
           </p>
-          <router-link v-if="allFrames.length === 0" to="/capture/frame" class="btn btn-primary">
-            Add Frame
-          </router-link>
+          <div class="flex gap-2 justify-center">
+            <router-link to="/capture/frame" class="btn btn-primary">
+              Capture Frame
+            </router-link>
+            <router-link v-if="!authStore.isAuthenticated" to="/capture/wall" class="btn btn-secondary">
+              Capture Wall
+            </router-link>
+          </div>
         </div>
 
         <div v-else class="grid grid-cols-2 gap-3">
@@ -1152,8 +1291,8 @@ const getFrameDimensions = (frame) => {
           />
         </div>
 
-        <!-- Recrop button -->
-        <div class="mb-4">
+        <!-- Recrop button (owner only) -->
+        <div v-if="authStore.isAuthenticated" class="mb-4">
           <button
             @click="startRecrop"
             class="text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1"
@@ -1170,7 +1309,7 @@ const getFrameDimensions = (frame) => {
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-semibold">Frame Properties</h3>
             <button
-              v-if="!editingFrameDimensions"
+              v-if="!editingFrameDimensions && authStore.isAuthenticated"
               @click="startEditFrameDimensions"
               class="text-gray-400 hover:text-primary-400 text-sm"
             >
@@ -1525,6 +1664,40 @@ const getFrameDimensions = (frame) => {
           </button>
         </div>
         <p v-if="saveError" class="text-red-400 text-xs mt-3 text-center">{{ saveError }}</p>
+      </div>
+    </div>
+
+    <!-- Save Layout name modal -->
+    <div
+      v-if="showSaveLayoutModal"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+      @click.self="showSaveLayoutModal = false"
+    >
+      <div class="card w-full max-w-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold">Name This Layout</h2>
+          <button @click="showSaveLayoutModal = false" class="text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <input
+          v-model="layoutName"
+          type="text"
+          placeholder="e.g., Holiday arrangement"
+          class="w-full px-3 py-2 bg-dark-100 border border-gray-600 rounded text-sm mb-4"
+          @keyup.enter="saveLayout"
+          autofocus
+        />
+        <div class="flex gap-3">
+          <button @click="showSaveLayoutModal = false" class="btn btn-secondary flex-1 text-sm">
+            Cancel
+          </button>
+          <button @click="saveLayout" class="btn btn-primary flex-1 text-sm">
+            Save
+          </button>
+        </div>
       </div>
     </div>
 

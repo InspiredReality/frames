@@ -38,14 +38,12 @@ const routes = [
   {
     path: '/capture/frame',
     name: 'capture-frame',
-    component: () => import('@/views/CaptureFrame.vue'),
-    meta: { requiresAuth: true }
+    component: () => import('@/views/CaptureFrame.vue')
   },
   {
     path: '/capture/wall',
     name: 'capture-wall',
-    component: () => import('@/views/CaptureWall.vue'),
-    meta: { requiresAuth: true }
+    component: () => import('@/views/CaptureWall.vue')
   },
   {
     path: '/gallery',
@@ -56,8 +54,7 @@ const routes = [
   {
     path: '/wall/:id',
     name: 'wall-editor',
-    component: () => import('@/views/WallEditor.vue'),
-    meta: { requiresAuth: true }
+    component: () => import('@/views/WallEditor.vue')
   },
   {
     path: '/ar/:wallId?',
