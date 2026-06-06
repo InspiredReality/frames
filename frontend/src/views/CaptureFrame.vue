@@ -30,6 +30,7 @@ const loading = ref(false)
 const error = ref('')
 
 const presetColors = [
+  { label: 'None', value: null },
   { label: 'Black', value: '#000000' },
   { label: 'White', value: '#FFFFFF' },
   { label: 'Brown', value: '#8B4513' }
@@ -316,7 +317,7 @@ const savePicture = async () => {
         </div>
 
         <p class="text-sm text-gray-400 text-center mb-4">
-          Drag to rotate the 3D preview
+          Two-finger pinch to zoom &amp; rotate
         </p>
 
         <!-- Name input -->
@@ -348,14 +349,20 @@ const savePicture = async () => {
           <div class="flex gap-2 flex-wrap">
             <button
               v-for="preset in presetColors"
-              :key="preset.value"
+              :key="String(preset.value)"
               @click="frameColor = preset.value; showColorPicker = false"
               class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
               :class="frameColor === preset.value && !showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
             >
               <span
+                v-if="preset.value"
                 class="w-5 h-5 rounded-full border border-gray-500"
                 :style="{ backgroundColor: preset.value }"
+              ></span>
+              <span
+                v-else
+                class="w-5 h-5 rounded-full border border-gray-500 overflow-hidden"
+                style="background: linear-gradient(135deg, transparent 45%, #6b7280 45%, #6b7280 55%, transparent 55%)"
               ></span>
               <span class="text-sm">{{ preset.label }}</span>
             </button>

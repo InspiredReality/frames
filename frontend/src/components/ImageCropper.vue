@@ -428,7 +428,7 @@ defineExpose({ resetCrop, emitCrop, flipOrientation })
       <button @click="resetCrop" class="reset-btn">
         Reset Crop
       </button>
-      <label v-if="aspectRatio" class="lock-label">
+      <label class="lock-label">
         <input
           type="checkbox"
           v-model="lockAspectRatio"
