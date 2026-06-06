@@ -1,6 +1,16 @@
 <script setup>
+import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import NavBar from './components/NavBar.vue'
+import { useAuthStore } from './store/auth'
+
+const authStore = useAuthStore()
+
+onMounted(() => {
+  if (authStore.token) {
+    authStore.fetchUser().catch(() => {})
+  }
+})
 </script>
 
 <template>
