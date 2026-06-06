@@ -69,6 +69,11 @@ def create_app() -> FastAPI:
             conn.commit()
         except Exception:
             conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE picture_frames ADD COLUMN frame_thickness_inches FLOAT DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     # -------------------
     # CORS

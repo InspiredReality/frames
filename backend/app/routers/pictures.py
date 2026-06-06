@@ -349,9 +349,6 @@ def create_frame(
         frame.set_dimensions_inches(payload.width, payload.height, depth,
                                     total_width=payload.total_width, total_height=payload.total_height)
 
-    db.add(frame)
-    db.flush()  # get frame.id without committing yet
-
     # Generate 3D model
     models_folder = Path(settings.UPLOAD_FOLDER) / "models"
     models_folder.mkdir(parents=True, exist_ok=True)
@@ -359,6 +356,9 @@ def create_frame(
     picture_abs = Path(settings.UPLOAD_FOLDER) / picture.image_path
 
     try:
+        db.add(frame)
+        db.flush()  # get frame.id without committing yet
+
         model_path = generate_frame_model(
             frame_id=frame.id,
             width_cm=frame.width_cm,
