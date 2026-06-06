@@ -353,12 +353,16 @@ watch(lockAspectRatio, (locked) => {
   }
 })
 
-// Watch for orientation changes and flip the crop box
+// Watch for orientation changes and flip the crop box.
+// When an aspect ratio is active, adjustToAspectRatio() (triggered by the aspectRatio
+// watcher above) already reorients the crop correctly — flipping again would undo it.
 let lastOrientation = props.orientation
 watch(() => props.orientation, (newOrientation) => {
   if (newOrientation !== lastOrientation) {
-    flipOrientation()
     lastOrientation = newOrientation
+    if (!props.aspectRatio) {
+      flipOrientation()
+    }
   }
 })
 
