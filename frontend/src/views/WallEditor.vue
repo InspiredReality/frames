@@ -86,12 +86,7 @@ onMounted(async () => {
     pickerTab.value = 'public'
   }
   try {
-    const fetchOwn = authStore.isAuthenticated ? picturesStore.fetchPictures() : Promise.resolve()
-    await Promise.all([
-      wallsStore.fetchWall(parseInt(route.params.id)),
-      fetchOwn,
-      picturesStore.fetchPublicPictures()
-    ])
+    await wallsStore.fetchWall(parseInt(route.params.id))
     if (!wallsStore.currentWall) {
       error.value = 'Wall not found'
     }
@@ -103,9 +98,14 @@ onMounted(async () => {
     } else {
       error.value = 'Failed to load wall'
     }
+    return
   } finally {
     loading.value = false
   }
+  // Load supplementary picture data independently so a failure here
+  // doesn't block the wall from rendering.
+  const fetchOwn = authStore.isAuthenticated ? picturesStore.fetchPictures().catch(() => {}) : Promise.resolve()
+  Promise.all([fetchOwn, picturesStore.fetchPublicPictures().catch(() => {})]).catch(() => {})
 })
 
 onUnmounted(() => {
