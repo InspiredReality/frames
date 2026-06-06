@@ -1,18 +1,150 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
 import { getUploadUrl } from '@/services/api'
 import FramePreview2D from '@/components/FramePreview2D.vue'
+import ImageCropper from '@/components/ImageCropper.vue'
 
 const router = useRouter()
 const wallsStore = useWallsStore()
 const picturesStore = usePicturesStore()
 
 const loading = ref(true)
-const activeTab = ref('all') // 'all', 'walls', 'frames'
+const activeTab = ref('all')
 const selectedFrame = ref(null)
+
+const CM_PER_INCH = 2.54
+
+// --- Edit/copy state ---
+const editLoadingImage = ref(false)
+const editImageDataUrl = ref(null)
+const editCroppedData = ref(null)
+const editDimensions = ref({ widthCm: 0, heightCm: 0, thicknessCm: 2.54, unit: 'in' })
+const editColor = ref('#000000')
+const editShowColorPicker = ref(false)
+const editSaving = ref(false)
+const editError = ref('')
+
+const editPresetColors = [
+  { label: 'None', value: null },
+  { label: 'Black', value: '#000000' },
+  { label: 'White', value: '#FFFFFF' },
+  { label: 'Brown', value: '#8B4513' }
+]
+
+const editDisplayWidth = computed({
+  get: () => {
+    const cm = editDimensions.value.widthCm
+    return editDimensions.value.unit === 'cm' ? +cm.toFixed(1) : +(cm / CM_PER_INCH).toFixed(2)
+  },
+  set: (val) => {
+    editDimensions.value.widthCm = editDimensions.value.unit === 'cm' ? val : val * CM_PER_INCH
+  }
+})
+
+const editDisplayHeight = computed({
+  get: () => {
+    const cm = editDimensions.value.heightCm
+    return editDimensions.value.unit === 'cm' ? +cm.toFixed(1) : +(cm / CM_PER_INCH).toFixed(2)
+  },
+  set: (val) => {
+    editDimensions.value.heightCm = editDimensions.value.unit === 'cm' ? val : val * CM_PER_INCH
+  }
+})
+
+const editDisplayThickness = computed({
+  get: () => {
+    const cm = editDimensions.value.thicknessCm
+    return editDimensions.value.unit === 'cm' ? +cm.toFixed(1) : +(cm / CM_PER_INCH).toFixed(2)
+  },
+  set: (val) => {
+    editDimensions.value.thicknessCm = editDimensions.value.unit === 'cm' ? val : val * CM_PER_INCH
+  }
+})
+
+const editAspectRatio = computed(() => {
+  const w = editDimensions.value.widthCm
+  const h = editDimensions.value.heightCm
+  return w && h ? w / h : null
+})
+
+// Load image + init edit state whenever a frame is selected
+watch(selectedFrame, async (frame) => {
+  editImageDataUrl.value = null
+  editCroppedData.value = null
+  editError.value = ''
+  editShowColorPicker.value = false
+
+  if (!frame) return
+
+  const frameData = frame.frames?.[0]
+  editDimensions.value = {
+    widthCm: frameData?.dimensions?.cm?.width || 0,
+    heightCm: frameData?.dimensions?.cm?.height || 0,
+    thicknessCm: (frameData?.styling?.frame_thickness ?? 1) * CM_PER_INCH,
+    unit: 'in'
+  }
+  editColor.value = frameData?.styling?.frame_color || '#000000'
+
+  const imageUrl = frame.image_path ? getUploadUrl(frame.image_path) : null
+  if (!imageUrl) return
+
+  editLoadingImage.value = true
+  try {
+    const resp = await fetch(imageUrl)
+    const blob = await resp.blob()
+    editImageDataUrl.value = await new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target.result)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    editImageDataUrl.value = imageUrl // fallback to direct URL
+  } finally {
+    editLoadingImage.value = false
+  }
+})
+
+const getIteratedName = (name) => {
+  const match = (name || 'Frame').trim().match(/^(.*)\s+\((\d+)\)$/)
+  if (match) return `${match[1]} (${parseInt(match[2]) + 1})`
+  return `${name} (2)`
+}
+
+const saveEditedCopy = async () => {
+  if (!editCroppedData.value?.blob) {
+    editError.value = 'Image not ready — wait a moment and try again'
+    return
+  }
+
+  editSaving.value = true
+  editError.value = ''
+
+  try {
+    const iteratedName = getIteratedName(selectedFrame.value?.name || 'Frame')
+    const file = new File([editCroppedData.value.blob], 'frame.jpg', { type: 'image/jpeg' })
+    const picture = await picturesStore.uploadPicture(file, iteratedName)
+
+    await picturesStore.createFrame(picture.id, {
+      width: editDimensions.value.widthCm / CM_PER_INCH,
+      height: editDimensions.value.heightCm / CM_PER_INCH,
+      depth: 1,
+      unit: 'inches',
+      frame_color: editColor.value,
+      frame_thickness: editDimensions.value.thicknessCm / CM_PER_INCH,
+    })
+
+    selectedFrame.value = null
+    await picturesStore.fetchPublicPictures()
+  } catch (err) {
+    const d = err.response?.data
+    editError.value = d?.error || (typeof d?.detail === 'string' ? d.detail : null) || 'Failed to save copy'
+  } finally {
+    editSaving.value = false
+  }
+}
 
 onMounted(async () => {
   try {
@@ -165,37 +297,164 @@ const getFrameDimensions = (picture) => {
       </div>
     </div>
 
-    <!-- Frame preview modal -->
+    <!-- Frame edit/copy modal -->
     <div
       v-if="selectedFrame"
-      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+      class="fixed inset-0 bg-black/70 flex items-start justify-center p-4 z-50 overflow-y-auto"
       @click.self="selectedFrame = null"
     >
-      <div class="card max-w-sm w-full">
+      <div class="card max-w-md w-full my-4">
+        <!-- Header -->
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold">{{ selectedFrame.name }}</h2>
-          <button @click="selectedFrame = null" class="text-gray-400 hover:text-white">
+          <div>
+            <h2 class="text-xl font-bold">{{ selectedFrame.name }}</h2>
+            <p class="text-xs text-gray-400 mt-0.5">Saving as: <span class="text-primary-400">{{ getIteratedName(selectedFrame.name) }}</span></p>
+          </div>
+          <button @click="selectedFrame = null" class="text-gray-400 hover:text-white flex-shrink-0 ml-2">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
-        <div class="flex justify-center bg-dark-300 rounded-lg p-4 mb-4">
-          <FramePreview2D
-            v-if="selectedFrame.frames?.length"
-            :imageUrl="getImageUrl(selectedFrame.image_path)"
-            :widthCm="getFrameDimensions(selectedFrame).widthCm"
-            :heightCm="getFrameDimensions(selectedFrame).heightCm"
-            :frameColor="getFrameDimensions(selectedFrame).frameColor"
-            :frameThickness="getFrameDimensions(selectedFrame).frameThickness"
-            :maxWidth="300"
-            :maxHeight="300"
+
+        <!-- Image / Cropper -->
+        <div class="mb-4">
+          <div v-if="editLoadingImage" class="flex justify-center items-center bg-dark-300 rounded-lg h-48">
+            <div class="spinner"></div>
+          </div>
+          <ImageCropper
+            v-else-if="editImageDataUrl"
+            :imageUrl="editImageDataUrl"
+            :aspectRatio="editAspectRatio"
+            @crop="editCroppedData = $event"
           />
-          <img v-else :src="getImageUrl(selectedFrame.image_path)" class="max-w-full max-h-64 rounded-lg" />
+          <div v-else class="flex justify-center bg-dark-300 rounded-lg p-4">
+            <FramePreview2D
+              v-if="selectedFrame.frames?.length"
+              :imageUrl="getImageUrl(selectedFrame.image_path)"
+              :widthCm="getFrameDimensions(selectedFrame).widthCm"
+              :heightCm="getFrameDimensions(selectedFrame).heightCm"
+              :frameColor="getFrameDimensions(selectedFrame).frameColor"
+              :frameThickness="getFrameDimensions(selectedFrame).frameThickness"
+              :maxWidth="300"
+              :maxHeight="240"
+            />
+            <img v-else :src="getImageUrl(selectedFrame.image_path)" class="max-w-full max-h-48 rounded-lg" />
+          </div>
         </div>
-        <router-link to="/register" class="btn btn-primary w-full text-center block">
-          Create Account to Use This Frame
-        </router-link>
+
+        <!-- Dimensions -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm text-gray-400">Dimensions</label>
+            <div class="flex rounded-lg overflow-hidden border border-gray-600 text-xs">
+              <button
+                @click="editDimensions.unit = 'in'"
+                class="px-2 py-1 transition"
+                :class="editDimensions.unit === 'in' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400'"
+              >in</button>
+              <button
+                @click="editDimensions.unit = 'cm'"
+                class="px-2 py-1 transition"
+                :class="editDimensions.unit === 'cm' ? 'bg-primary-600 text-white' : 'bg-dark-300 text-gray-400'"
+              >cm</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Width</label>
+              <input
+                v-model.number="editDisplayWidth"
+                type="number"
+                min="0.1"
+                step="0.1"
+                class="w-full px-2 py-1.5 bg-dark-100 border border-gray-600 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Height</label>
+              <input
+                v-model.number="editDisplayHeight"
+                type="number"
+                min="0.1"
+                step="0.1"
+                class="w-full px-2 py-1.5 bg-dark-100 border border-gray-600 rounded text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Frame Thickness -->
+        <div class="mb-4">
+          <label class="block text-sm text-gray-400 mb-1">
+            Frame Thickness ({{ editDimensions.unit === 'cm' ? 'cm' : 'in' }})
+          </label>
+          <input
+            v-model.number="editDisplayThickness"
+            type="number"
+            min="0"
+            :max="editDimensions.unit === 'cm' ? 12.7 : 5"
+            :step="editDimensions.unit === 'cm' ? 0.1 : 0.25"
+            class="w-full px-2 py-1.5 bg-dark-100 border border-gray-600 rounded text-sm"
+          />
+        </div>
+
+        <!-- Frame Color -->
+        <div class="mb-5">
+          <label class="block text-sm text-gray-400 mb-2">Frame Color</label>
+          <div class="flex gap-2 flex-wrap">
+            <button
+              v-for="preset in editPresetColors"
+              :key="String(preset.value)"
+              @click="editColor = preset.value; editShowColorPicker = false"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 transition text-sm"
+              :class="editColor === preset.value && !editShowColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span
+                v-if="preset.value"
+                class="w-4 h-4 rounded-full border border-gray-500"
+                :style="{ backgroundColor: preset.value }"
+              ></span>
+              <span
+                v-else
+                class="w-4 h-4 rounded-full border border-gray-500 overflow-hidden"
+                style="background: linear-gradient(135deg, transparent 45%, #6b7280 45%, #6b7280 55%, transparent 55%)"
+              ></span>
+              {{ preset.label }}
+            </button>
+            <button
+              @click="editShowColorPicker = !editShowColorPicker"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 transition text-sm"
+              :class="editShowColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
+            >
+              <span class="w-4 h-4 rounded-full border border-gray-500" style="background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red)"></span>
+              Custom
+            </button>
+          </div>
+          <div v-if="editShowColorPicker" class="mt-2">
+            <input
+              type="color"
+              v-model="editColor"
+              class="w-full h-10 rounded cursor-pointer bg-transparent border border-gray-600"
+            />
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div v-if="editError" class="mb-3 p-2 bg-red-500/20 border border-red-500 rounded text-red-400 text-sm">
+          {{ editError }}
+        </div>
+
+        <!-- Save button -->
+        <button
+          @click="saveEditedCopy"
+          :disabled="editSaving || editLoadingImage || !editCroppedData?.blob"
+          class="btn btn-primary w-full"
+        >
+          <span v-if="editSaving">Saving…</span>
+          <span v-else-if="editLoadingImage">Loading image…</span>
+          <span v-else>Save as "{{ getIteratedName(selectedFrame.name) }}"</span>
+        </button>
       </div>
     </div>
 
