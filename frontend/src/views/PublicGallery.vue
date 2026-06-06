@@ -44,7 +44,7 @@ const getFrameDimensions = (picture) => {
     widthCm: frame.dimensions?.cm?.width,
     heightCm: frame.dimensions?.cm?.height,
     frameColor: frame.styling?.frame_color || '#8B4513',
-    frameThickness: frame.styling?.frame_thickness || 1
+    frameThickness: frame.styling?.frame_thickness ?? 1
   }
 }
 </script>

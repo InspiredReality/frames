@@ -335,7 +335,7 @@ const savePicture = async () => {
           <input
             v-model.number="frameThickness"
             type="number"
-            min="0.25"
+            min="0"
             max="5"
             step="0.25"
             class="w-full"

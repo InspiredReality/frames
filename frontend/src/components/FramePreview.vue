@@ -103,27 +103,29 @@ const createFrame = () => {
   const totalWidth = width + borderWidth * 2
   const totalHeight = height + borderWidth * 2
 
-  // Top border
-  const topGeom = new THREE.BoxGeometry(totalWidth, borderWidth, depth)
-  const topBorder = new THREE.Mesh(topGeom, frameMaterial)
-  topBorder.position.set(0, (height + borderWidth) / 2, 0)
-  frameGroup.add(topBorder)
+  if (borderWidth > 0) {
+    // Top border
+    const topGeom = new THREE.BoxGeometry(totalWidth, borderWidth, depth)
+    const topBorder = new THREE.Mesh(topGeom, frameMaterial)
+    topBorder.position.set(0, (height + borderWidth) / 2, 0)
+    frameGroup.add(topBorder)
 
-  // Bottom border
-  const bottomBorder = new THREE.Mesh(topGeom.clone(), frameMaterial)
-  bottomBorder.position.set(0, -(height + borderWidth) / 2, 0)
-  frameGroup.add(bottomBorder)
+    // Bottom border
+    const bottomBorder = new THREE.Mesh(topGeom.clone(), frameMaterial)
+    bottomBorder.position.set(0, -(height + borderWidth) / 2, 0)
+    frameGroup.add(bottomBorder)
 
-  // Left border
-  const sideGeom = new THREE.BoxGeometry(borderWidth, height, depth)
-  const leftBorder = new THREE.Mesh(sideGeom, frameMaterial)
-  leftBorder.position.set(-(width + borderWidth) / 2, 0, 0)
-  frameGroup.add(leftBorder)
+    // Left border
+    const sideGeom = new THREE.BoxGeometry(borderWidth, height, depth)
+    const leftBorder = new THREE.Mesh(sideGeom, frameMaterial)
+    leftBorder.position.set(-(width + borderWidth) / 2, 0, 0)
+    frameGroup.add(leftBorder)
 
-  // Right border
-  const rightBorder = new THREE.Mesh(sideGeom.clone(), frameMaterial)
-  rightBorder.position.set((width + borderWidth) / 2, 0, 0)
-  frameGroup.add(rightBorder)
+    // Right border
+    const rightBorder = new THREE.Mesh(sideGeom.clone(), frameMaterial)
+    rightBorder.position.set((width + borderWidth) / 2, 0, 0)
+    frameGroup.add(rightBorder)
+  }
 
   // Back panel
   const backGeom = new THREE.PlaneGeometry(totalWidth, totalHeight)

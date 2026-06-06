@@ -47,7 +47,7 @@ const props = defineProps({
 // Calculate border width based on frame thickness (scale it for visual representation)
 // 1 inch thickness = 12px border, scale proportionally
 const frameBorderWidth = computed(() => {
-  return Math.max(4, Math.min(40, props.frameThickness * 12))
+  return Math.max(0, Math.min(40, props.frameThickness * 12))
 })
 
 const containerStyle = computed(() => {

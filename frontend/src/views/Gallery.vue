@@ -326,7 +326,7 @@ const startEditingFrameDimensions = (frame) => {
     frameDimensionEdit.value = {
       widthCm: frameData.dimensions?.cm?.width || 0,
       heightCm: frameData.dimensions?.cm?.height || 0,
-      thicknessCm: (frameData.styling?.frame_thickness || 1) * CM_PER_INCH, // stored in inches, convert to cm
+      thicknessCm: (frameData.styling?.frame_thickness ?? 1) * CM_PER_INCH, // stored in inches, convert to cm
       unit: 'in' // Default display to inches
     }
     frameStyleEdit.value = {
@@ -574,7 +574,7 @@ const getFrameDimensions = (frame) => {
       widthCm: frameData.dimensions?.cm?.width || 20,
       heightCm: frameData.dimensions?.cm?.height || 25,
       frameColor: frameData.styling?.frame_color || '#8B4513',
-      frameThickness: frameData.styling?.frame_thickness || 1
+      frameThickness: frameData.styling?.frame_thickness ?? 1
     }
   }
   return { widthCm: 20, heightCm: 25, frameColor: '#8B4513', frameThickness: 1 }
@@ -944,7 +944,7 @@ const getFrameDimensions = (frame) => {
                   <input
                     v-model.number="frameDisplayThickness"
                     type="number"
-                    :min="frameDimensionEdit.unit === 'cm' ? 0.6 : 0.25"
+                    :min="0"
                     :max="frameDimensionEdit.unit === 'cm' ? 12.7 : 5"
                     :step="frameDimensionEdit.unit === 'cm' ? 0.1 : 0.25"
                     class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"
