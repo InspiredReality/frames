@@ -203,9 +203,20 @@ const savePicture = async () => {
     <!-- Step 1: Camera Capture -->
     <div v-if="step === 1" class="max-w-2xl mx-auto">
       <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Frame</h2>
-      <p class="text-gray-400 text-center mb-6">
+      <p class="text-gray-400 text-center mb-4">
         Take a clear photo of the artwork or picture you want to visualize on a wall
       </p>
+      <div class="flex justify-center mb-6">
+        <button
+          @click="cameraRef?.triggerUpload()"
+          class="flex items-center gap-2 px-4 py-2 bg-dark-200 hover:bg-dark-300 border border-gray-600 hover:border-gray-500 rounded-lg text-sm text-gray-300 transition"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Upload From Photo Reel
+        </button>
+      </div>
       <CameraCapture ref="cameraRef" @capture="onCapture" @error="onCameraError" />
       <div class="mt-6">
         <QrCodeCard />
