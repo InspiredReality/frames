@@ -15,6 +15,7 @@ const canvasRef = ref(null)
 const fileInputRef = ref(null)
 const stream = ref(null)
 const isReady = ref(false)
+const cameraError = ref(null) // null | 'denied' | 'unavailable'
 const facingMode = ref('environment') // 'user' or 'environment'
 let autoCaptureId = null
 
@@ -33,6 +34,8 @@ const applyZoom = async (target) => {
 }
 
 const startCamera = async () => {
+  cameraError.value = null
+  isReady.value = false
   try {
     if (stream.value) {
       stream.value.getTracks().forEach(track => track.stop())
@@ -52,9 +55,11 @@ const startCamera = async () => {
       isReady.value = true
       await applyZoom(props.defaultZoom)
     }
-  } catch (error) {
-    console.error('Camera access error:', error)
-    emit('error', error.message || 'Could not access camera')
+  } catch (err) {
+    console.error('Camera access error:', err)
+    const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+    cameraError.value = isDenied ? 'denied' : 'unavailable'
+    emit('error', isDenied ? 'camera-permission-denied' : (err.message || 'Could not access camera'))
   }
 }
 
@@ -205,8 +210,29 @@ defineExpose({ capturePhoto, switchCamera, triggerUpload, startAutoCapture, stop
       </button>
     </div>
 
+    <!-- Camera error overlay -->
+    <div v-if="cameraError" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center px-6 gap-4">
+      <svg class="w-12 h-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+      </svg>
+      <div v-if="cameraError === 'denied'">
+        <p class="text-white font-semibold mb-1">Camera access denied</p>
+        <p class="text-gray-400 text-sm">Allow camera access in your browser's site settings, then tap Retry.</p>
+      </div>
+      <div v-else>
+        <p class="text-white font-semibold mb-1">Camera unavailable</p>
+        <p class="text-gray-400 text-sm">Your camera could not be accessed. Check that no other app is using it.</p>
+      </div>
+      <button
+        @click="startCamera"
+        class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm transition"
+      >
+        Retry
+      </button>
+    </div>
+
     <!-- Loading overlay -->
-    <div v-if="!isReady" class="absolute inset-0 flex items-center justify-center bg-black/50">
+    <div v-else-if="!isReady" class="absolute inset-0 flex items-center justify-center bg-black/50">
       <div class="spinner"></div>
     </div>
   </div>

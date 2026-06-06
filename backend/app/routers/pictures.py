@@ -37,7 +37,7 @@ class FrameCreateRequest(BaseModel):
     total_height: Optional[float] = None
 
     name: Optional[str] = None
-    frame_color: str = Field(default="#8B4513")
+    frame_color: Optional[str] = Field(default="#8B4513")
     frame_material: str = Field(default="wood")
     frame_thickness: Optional[float] = None
     mat_width: float = Field(default=0)

@@ -326,7 +326,7 @@ const startEditingFrameDimensions = (frame) => {
     frameDimensionEdit.value = {
       widthCm: frameData.dimensions?.cm?.width || 0,
       heightCm: frameData.dimensions?.cm?.height || 0,
-      thicknessCm: (frameData.styling?.frame_thickness || 1) * CM_PER_INCH, // stored in inches, convert to cm
+      thicknessCm: (frameData.styling?.frame_thickness ?? 1) * CM_PER_INCH, // stored in inches, convert to cm
       unit: 'in' // Default display to inches
     }
     frameStyleEdit.value = {
@@ -574,7 +574,7 @@ const getFrameDimensions = (frame) => {
       widthCm: frameData.dimensions?.cm?.width || 20,
       heightCm: frameData.dimensions?.cm?.height || 25,
       frameColor: frameData.styling?.frame_color || '#8B4513',
-      frameThickness: frameData.styling?.frame_thickness || 1
+      frameThickness: frameData.styling?.frame_thickness ?? 1
     }
   }
   return { widthCm: 20, heightCm: 25, frameColor: '#8B4513', frameThickness: 1 }
@@ -735,16 +735,6 @@ const getFrameDimensions = (frame) => {
                   title="Edit wall"
                 >
                   ✎
-                </button>
-                <button
-                  @click="deleteWall(wall.id)"
-                  class="btn bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white"
-                  title="Delete wall"
-                >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
                 </button>
               </template>
             </div>
@@ -944,7 +934,7 @@ const getFrameDimensions = (frame) => {
                   <input
                     v-model.number="frameDisplayThickness"
                     type="number"
-                    :min="frameDimensionEdit.unit === 'cm' ? 0.6 : 0.25"
+                    :min="0"
                     :max="frameDimensionEdit.unit === 'cm' ? 12.7 : 5"
                     :step="frameDimensionEdit.unit === 'cm' ? 0.1 : 0.25"
                     class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"

@@ -30,6 +30,7 @@ const loading = ref(false)
 const error = ref('')
 
 const presetColors = [
+  { label: 'None', value: null },
   { label: 'Black', value: '#000000' },
   { label: 'White', value: '#FFFFFF' },
   { label: 'Brown', value: '#8B4513' }
@@ -77,6 +78,7 @@ const onCapture = (data) => {
 }
 
 const onCameraError = (message) => {
+  if (message === 'camera-permission-denied') return // handled inline by CameraCapture
   error.value = message
 }
 
@@ -152,7 +154,9 @@ const savePicture = async () => {
       router.push('/public-gallery')
     }
   } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to save frame'
+    const d = err.response?.data
+    const msg = d?.error || (typeof d?.detail === 'string' ? d.detail : null)
+    error.value = msg || 'Failed to save frame'
   } finally {
     loading.value = false
   }
@@ -202,9 +206,20 @@ const savePicture = async () => {
     <!-- Step 1: Camera Capture -->
     <div v-if="step === 1" class="max-w-2xl mx-auto">
       <h2 class="text-2xl font-bold mb-4 text-center">Capture Your Frame</h2>
-      <p class="text-gray-400 text-center mb-6">
+      <p class="text-gray-400 text-center mb-4">
         Take a clear photo of the artwork or picture you want to visualize on a wall
       </p>
+      <div class="flex justify-center mb-6">
+        <button
+          @click="cameraRef?.triggerUpload()"
+          class="flex items-center gap-2 px-4 py-2 bg-dark-200 hover:bg-dark-300 border border-gray-600 hover:border-gray-500 rounded-lg text-sm text-gray-300 transition"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Upload Photo
+        </button>
+      </div>
       <CameraCapture ref="cameraRef" @capture="onCapture" @error="onCameraError" />
       <div class="mt-6">
         <QrCodeCard />
@@ -316,7 +331,7 @@ const savePicture = async () => {
         </div>
 
         <p class="text-sm text-gray-400 text-center mb-4">
-          Drag to rotate the 3D preview
+          Two-finger pinch to zoom &amp; rotate
         </p>
 
         <!-- Name input -->
@@ -335,7 +350,7 @@ const savePicture = async () => {
           <input
             v-model.number="frameThickness"
             type="number"
-            min="0.25"
+            min="0"
             max="5"
             step="0.25"
             class="w-full"
@@ -348,14 +363,20 @@ const savePicture = async () => {
           <div class="flex gap-2 flex-wrap">
             <button
               v-for="preset in presetColors"
-              :key="preset.value"
+              :key="String(preset.value)"
               @click="frameColor = preset.value; showColorPicker = false"
               class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
               :class="frameColor === preset.value && !showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
             >
               <span
+                v-if="preset.value"
                 class="w-5 h-5 rounded-full border border-gray-500"
                 :style="{ backgroundColor: preset.value }"
+              ></span>
+              <span
+                v-else
+                class="w-5 h-5 rounded-full border border-gray-500 overflow-hidden"
+                style="background: linear-gradient(135deg, transparent 45%, #6b7280 45%, #6b7280 55%, transparent 55%)"
               ></span>
               <span class="text-sm">{{ preset.label }}</span>
             </button>

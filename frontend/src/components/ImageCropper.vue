@@ -18,6 +18,9 @@ const props = defineProps({
 
 const emit = defineEmits(['crop'])
 
+const lockAspectRatio = ref(true)
+const activeAspectRatio = computed(() => lockAspectRatio.value ? props.aspectRatio : null)
+
 const containerRef = ref(null)
 const imageRef = ref(null)
 const isDragging = ref(false)
@@ -65,7 +68,7 @@ const onImageLoad = () => {
     }
 
     // If aspect ratio is set, adjust initial crop box
-    if (props.aspectRatio) {
+    if (activeAspectRatio.value) {
       adjustToAspectRatio()
     }
 
@@ -74,11 +77,11 @@ const onImageLoad = () => {
 }
 
 const adjustToAspectRatio = () => {
-  if (!props.aspectRatio || !imageDimensions.value.width) return
+  if (!activeAspectRatio.value || !imageDimensions.value.width) return
 
   const imgWidth = imageDimensions.value.width
   const imgHeight = imageDimensions.value.height
-  const targetAspect = props.aspectRatio
+  const targetAspect = activeAspectRatio.value
 
   // Get current crop box center and area
   const centerX = cropBox.value.x + cropBox.value.width / 2
@@ -219,10 +222,10 @@ const onMouseMove = (e) => {
       height = cropStart.value.height + (cropStart.value.y - y)
     }
 
-    // Apply aspect ratio constraint if set
-    if (props.aspectRatio) {
+    // Apply aspect ratio constraint if set and locked
+    if (activeAspectRatio.value) {
       const imgAspect = imageDimensions.value.width / imageDimensions.value.height
-      const targetAspect = props.aspectRatio
+      const targetAspect = activeAspectRatio.value
 
       // Adjust height based on width
       const actualWidth = (width / 100) * imageDimensions.value.width
@@ -337,17 +340,29 @@ const flipOrientation = () => {
 
 watch(() => props.aspectRatio, () => {
   if (props.aspectRatio) {
+    lockAspectRatio.value = true
     adjustToAspectRatio()
     emitCrop()
   }
 })
 
-// Watch for orientation changes and flip the crop box
+watch(lockAspectRatio, (locked) => {
+  if (locked && props.aspectRatio) {
+    adjustToAspectRatio()
+    emitCrop()
+  }
+})
+
+// Watch for orientation changes and flip the crop box.
+// When an aspect ratio is active, adjustToAspectRatio() (triggered by the aspectRatio
+// watcher above) already reorients the crop correctly — flipping again would undo it.
 let lastOrientation = props.orientation
 watch(() => props.orientation, (newOrientation) => {
   if (newOrientation !== lastOrientation) {
-    flipOrientation()
     lastOrientation = newOrientation
+    if (!props.aspectRatio) {
+      flipOrientation()
+    }
   }
 })
 
@@ -412,10 +427,20 @@ defineExpose({ resetCrop, emitCrop, flipOrientation })
       </div>
     </div>
 
-    <!-- Reset button -->
-    <button @click="resetCrop" class="reset-btn">
-      Reset Crop
-    </button>
+    <!-- Controls row -->
+    <div class="cropper-controls">
+      <button @click="resetCrop" class="reset-btn">
+        Reset Crop
+      </button>
+      <label class="lock-label">
+        <input
+          type="checkbox"
+          v-model="lockAspectRatio"
+          class="w-4 h-4 rounded border-gray-600 bg-dark-100 text-primary-500 focus:ring-primary-500"
+        />
+        Lock aspect ratio
+      </label>
+    </div>
   </div>
 </template>
 
@@ -535,8 +560,15 @@ defineExpose({ resetCrop, emitCrop, flipOrientation })
   .handle-sw { bottom: -14px; left: -14px; }
 }
 
-.reset-btn {
+.cropper-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   margin-top: 0.75rem;
+}
+
+.reset-btn {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   color: #9ca3af;
@@ -550,5 +582,15 @@ defineExpose({ resetCrop, emitCrop, flipOrientation })
 .reset-btn:hover {
   color: #fff;
   border-color: #0ea5e9;
+}
+
+.lock-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #9ca3af;
+  cursor: pointer;
+  user-select: none;
 }
 </style>
