@@ -46,7 +46,7 @@ const authStore = useAuthStore()
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </div>
-        <h3 class="text-xl font-semibold mb-2">Capture Frames & Walls</h3>
+        <h3 class="text-xl font-semibold mb-2">Capture<br>Frames & Walls</h3>
         <p class="text-gray-400">
           Take a photo of any picture frame and specify its real-world dimensions in inches or centimeters.
         </p>
@@ -58,7 +58,7 @@ const authStore = useAuthStore()
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </div>
-        <h3 class="text-xl font-semibold mb-2">Create 3D Models</h3>
+        <h3 class="text-xl font-semibold mb-2">Create<br>3D Models</h3>
         <p class="text-gray-400">
           Automatically generate accurate 3D models of your frames for realistic visualization.
         </p>
@@ -70,7 +70,7 @@ const authStore = useAuthStore()
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         </div>
-        <h3 class="text-xl font-semibold mb-2">Conceptualize Frames on Walls</h3>
+        <h3 class="text-xl font-semibold mb-2">Conceptualize<br>Frames on Walls</h3>
         <p class="text-gray-400">
           Place your framed pictures on captured walls and see how they look before committing.
         </p>
@@ -86,28 +86,28 @@ const authStore = useAuthStore()
             3
           </div>
           <h4 class="font-semibold mb-1">Add Wall</h4>
-          <p class="text-sm text-gray-400">Take or upload photo of your empty wall</p>
+          <p class="text-sm text-gray-400">Take or upload photo of your empty Wall</p>
         </div>
         <div class="text-center">
           <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
             1
           </div>
           <h4 class="font-semibold mb-1">Add Frames</h4>
-          <p class="text-sm text-gray-400">Take or upload photo of your picture frames</p>
+          <p class="text-sm text-gray-400">Take or upload photo of your picture Frames</p>
         </div>
         <div class="text-center">
           <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
             2
           </div>
           <h4 class="font-semibold mb-1">Set Dimensions</h4>
-          <p class="text-sm text-gray-400">Enter size in inches or cm</p>
+          <p class="text-sm text-gray-400">Enter sizes in feet/inches or cm</p>
         </div>
         <div class="text-center">
           <div class="w-10 h-10 mx-auto mb-3 bg-primary-500 rounded-full flex items-center justify-center text-xl font-bold">
             4
           </div>
           <h4 class="font-semibold mb-1">Place & Preview</h4>
-          <p class="text-sm text-gray-400">Arrange Frames in 3D</p>
+          <p class="text-sm text-gray-400">Arrange Frames on 3D version of your Wall</p>
         </div>
       </div>
     </div>
