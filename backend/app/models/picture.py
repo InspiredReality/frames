@@ -82,7 +82,8 @@ class PictureFrame(Base):
     total_height_cm = Column(Float)
 
     # Frame styling
-    frame_color = Column(String(7), default='#8B4513')  # Brown default
+    frame_color = Column(String(7), default='#8B4513')  # Brown default; NULL means no frame border
+    frame_thickness_inches = Column(Float, default=0)   # 0 means no frame border
     frame_material = Column(String(50), default='wood')
     mat_width_inches = Column(Float, default=0)  # Mat/border width
     mat_color = Column(String(7), default='#FFFFFF')
@@ -150,6 +151,7 @@ class PictureFrame(Base):
             },
             'styling': {
                 'frame_color': self.frame_color,
+                'frame_thickness': self.frame_thickness_inches or 0,
                 'frame_material': self.frame_material,
                 'mat_width_inches': self.mat_width_inches,
                 'mat_color': self.mat_color

@@ -336,6 +336,7 @@ def create_frame(
         picture_id=picture.id,
         name=payload.name or f"Frame {existing_count + 1}",
         frame_color=payload.frame_color,
+        frame_thickness_inches=payload.frame_thickness if payload.frame_thickness is not None else 0,
         frame_material=payload.frame_material,
         mat_width_inches=payload.mat_width,
         mat_color=payload.mat_color,
