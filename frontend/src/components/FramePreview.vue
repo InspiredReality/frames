@@ -12,7 +12,6 @@ const props = defineProps({
     default: () => ({ width: 10, height: 8, depth: 1 })
   },
   frameColor: {
-    type: String,
     default: '#000000'
   },
   frameThickness: {
@@ -24,6 +23,75 @@ const props = defineProps({
 const containerRef = ref(null)
 let scene, camera, renderer, controls, frameGroup, animationId
 const textureLoader = new THREE.TextureLoader()
+
+// --- Touch scroll state (single-finger scrolls page; two-finger handled by OrbitControls) ---
+let touchScrolling = false
+let touchScrollLastY = 0
+let touchScrollVelocity = 0
+let touchScrollAnimId = null
+const activeTouchPointers = new Set()
+let singleTouchPointerId = null
+
+const applyScrollMomentum = () => {
+  if (Math.abs(touchScrollVelocity) < 0.5) { touchScrollAnimId = null; return }
+  window.scrollBy(0, -touchScrollVelocity)
+  touchScrollVelocity *= 0.88
+  touchScrollAnimId = requestAnimationFrame(applyScrollMomentum)
+}
+
+const onTouchPointerDown = (event) => {
+  if (event.pointerType !== 'touch') return
+  activeTouchPointers.add(event.pointerId)
+
+  if (activeTouchPointers.size > 1) {
+    touchScrolling = false
+    touchScrollVelocity = 0
+    if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
+    singleTouchPointerId = null
+    return
+  }
+
+  singleTouchPointerId = event.pointerId
+  if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
+  touchScrolling = true
+  touchScrollLastY = event.clientY
+  touchScrollVelocity = 0
+}
+
+const onTouchPointerMove = (event) => {
+  if (event.pointerType !== 'touch' || event.pointerId !== singleTouchPointerId || !touchScrolling) return
+  const dy = event.clientY - touchScrollLastY
+  touchScrollVelocity = dy
+  window.scrollBy(0, -dy)
+  touchScrollLastY = event.clientY
+}
+
+const onTouchPointerUp = (event) => {
+  if (event.pointerType !== 'touch') return
+  activeTouchPointers.delete(event.pointerId)
+
+  if (event.pointerId !== singleTouchPointerId) {
+    if (activeTouchPointers.size === 0) singleTouchPointerId = null
+    return
+  }
+
+  singleTouchPointerId = null
+  if (touchScrolling) {
+    touchScrolling = false
+    touchScrollAnimId = requestAnimationFrame(applyScrollMomentum)
+  }
+}
+
+const onTouchPointerCancel = (event) => {
+  if (event.pointerType !== 'touch') return
+  activeTouchPointers.delete(event.pointerId)
+  if (activeTouchPointers.size === 0) {
+    touchScrolling = false
+    touchScrollVelocity = 0
+    if (touchScrollAnimId) { cancelAnimationFrame(touchScrollAnimId); touchScrollAnimId = null }
+    singleTouchPointerId = null
+  }
+}
 
 const initScene = () => {
   if (!containerRef.value) return
@@ -45,6 +113,14 @@ const initScene = () => {
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   controls.dampingFactor = 0.05
+  // Single-finger scrolls the page; two-finger pinch/pan stays with OrbitControls
+  controls.touches = { ONE: -1, TWO: THREE.TOUCH.DOLLY_PAN }
+
+  // Intercept touch events in capture phase (before OrbitControls) to implement page scroll
+  containerRef.value.addEventListener('pointerdown', onTouchPointerDown, { passive: false, capture: true })
+  containerRef.value.addEventListener('pointermove', onTouchPointerMove, { passive: false, capture: true })
+  containerRef.value.addEventListener('pointerup', onTouchPointerUp, { capture: true })
+  containerRef.value.addEventListener('pointercancel', onTouchPointerCancel, { capture: true })
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
   scene.add(ambientLight)
@@ -74,9 +150,6 @@ const createFrame = () => {
 
   frameGroup = new THREE.Group()
 
-  const frameColor = new THREE.Color(props.frameColor)
-  const frameMaterial = new THREE.MeshStandardMaterial({ color: frameColor })
-
   // Picture plane (image in center)
   const pictureGeometry = new THREE.PlaneGeometry(width, height)
 
@@ -103,27 +176,31 @@ const createFrame = () => {
   const totalWidth = width + borderWidth * 2
   const totalHeight = height + borderWidth * 2
 
-  // Top border
-  const topGeom = new THREE.BoxGeometry(totalWidth, borderWidth, depth)
-  const topBorder = new THREE.Mesh(topGeom, frameMaterial)
-  topBorder.position.set(0, (height + borderWidth) / 2, 0)
-  frameGroup.add(topBorder)
+  if (borderWidth > 0 && props.frameColor) {
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(props.frameColor) })
 
-  // Bottom border
-  const bottomBorder = new THREE.Mesh(topGeom.clone(), frameMaterial)
-  bottomBorder.position.set(0, -(height + borderWidth) / 2, 0)
-  frameGroup.add(bottomBorder)
+    // Top border
+    const topGeom = new THREE.BoxGeometry(totalWidth, borderWidth, depth)
+    const topBorder = new THREE.Mesh(topGeom, frameMaterial)
+    topBorder.position.set(0, (height + borderWidth) / 2, 0)
+    frameGroup.add(topBorder)
 
-  // Left border
-  const sideGeom = new THREE.BoxGeometry(borderWidth, height, depth)
-  const leftBorder = new THREE.Mesh(sideGeom, frameMaterial)
-  leftBorder.position.set(-(width + borderWidth) / 2, 0, 0)
-  frameGroup.add(leftBorder)
+    // Bottom border
+    const bottomBorder = new THREE.Mesh(topGeom.clone(), frameMaterial)
+    bottomBorder.position.set(0, -(height + borderWidth) / 2, 0)
+    frameGroup.add(bottomBorder)
 
-  // Right border
-  const rightBorder = new THREE.Mesh(sideGeom.clone(), frameMaterial)
-  rightBorder.position.set((width + borderWidth) / 2, 0, 0)
-  frameGroup.add(rightBorder)
+    // Left border
+    const sideGeom = new THREE.BoxGeometry(borderWidth, height, depth)
+    const leftBorder = new THREE.Mesh(sideGeom, frameMaterial)
+    leftBorder.position.set(-(width + borderWidth) / 2, 0, 0)
+    frameGroup.add(leftBorder)
+
+    // Right border
+    const rightBorder = new THREE.Mesh(sideGeom.clone(), frameMaterial)
+    rightBorder.position.set((width + borderWidth) / 2, 0, 0)
+    frameGroup.add(rightBorder)
+  }
 
   // Back panel
   const backGeom = new THREE.PlaneGeometry(totalWidth, totalHeight)
@@ -190,6 +267,14 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   cancelAnimationFrame(animationId)
+
+  if (containerRef.value) {
+    containerRef.value.removeEventListener('pointerdown', onTouchPointerDown, { capture: true })
+    containerRef.value.removeEventListener('pointermove', onTouchPointerMove, { capture: true })
+    containerRef.value.removeEventListener('pointerup', onTouchPointerUp, { capture: true })
+    containerRef.value.removeEventListener('pointercancel', onTouchPointerCancel, { capture: true })
+  }
+  if (touchScrollAnimId) cancelAnimationFrame(touchScrollAnimId)
 
   if (frameGroup) {
     frameGroup.traverse((child) => {

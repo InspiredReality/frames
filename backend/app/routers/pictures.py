@@ -37,7 +37,7 @@ class FrameCreateRequest(BaseModel):
     total_height: Optional[float] = None
 
     name: Optional[str] = None
-    frame_color: str = Field(default="#8B4513")
+    frame_color: Optional[str] = Field(default="#8B4513")
     frame_material: str = Field(default="wood")
     frame_thickness: Optional[float] = None
     mat_width: float = Field(default=0)
@@ -336,6 +336,7 @@ def create_frame(
         picture_id=picture.id,
         name=payload.name or f"Frame {existing_count + 1}",
         frame_color=payload.frame_color,
+        frame_thickness_inches=payload.frame_thickness if payload.frame_thickness is not None else 0,
         frame_material=payload.frame_material,
         mat_width_inches=payload.mat_width,
         mat_color=payload.mat_color,

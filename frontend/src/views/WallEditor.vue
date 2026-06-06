@@ -140,7 +140,7 @@ const allFrames = computed(() => {
         pictureName: picture.name,
         pictureImage: picture.thumbnail_path || picture.image_path,
         dimensions: { cm: { width: 20, height: 25, depth: 2 } },
-        styling: { frame_color: '#8B4513', frame_thickness: 1 },
+        styling: { frame_color: null, frame_thickness: 0 },
         isPublic
       })
     }
@@ -662,7 +662,7 @@ const startEditFrameDimensions = () => {
     unit: unit
   }
   // Load frame styling (thickness is stored in inches, convert to selected unit)
-  const thicknessInches = selectedFrame.value.styling?.frame_thickness || 1
+  const thicknessInches = selectedFrame.value.styling?.frame_thickness ?? 1
   frameStyleEdit.value = {
     color: selectedFrame.value.styling?.frame_color || '#000000',
     thickness: unit === 'cm' ? thicknessInches * 2.54 : thicknessInches
@@ -817,7 +817,7 @@ const getFrameDimensions = (frame) => {
       widthCm: frame.dimensions.cm.width || 20,
       heightCm: frame.dimensions.cm.height || 25,
       frameColor: frame.styling?.frame_color || '#8B4513',
-      frameThickness: frame.styling?.frame_thickness || 1
+      frameThickness: frame.styling?.frame_thickness ?? 1
     }
   }
   return { widthCm: 20, heightCm: 25, frameColor: '#8B4513', frameThickness: 1 }
@@ -1327,7 +1327,7 @@ const getFrameDimensions = (frame) => {
             </div>
             <div>
               <span class="text-xs text-gray-400">Thickness:</span>
-              <p class="text-sm text-gray-300">{{ selectedFrame.styling?.frame_thickness || 1 }}"</p>
+              <p class="text-sm text-gray-300">{{ selectedFrame.styling?.frame_thickness ?? 1 }}"</p>
             </div>
             <div class="flex items-center gap-2">
               <span class="text-xs text-gray-400">Color:</span>
@@ -1380,7 +1380,7 @@ const getFrameDimensions = (frame) => {
               <input
                 v-model.number="frameStyleEdit.thickness"
                 type="number"
-                :min="frameDimensionEdit.unit === 'cm' ? 0.6 : 0.25"
+                :min="0"
                 :max="frameDimensionEdit.unit === 'cm' ? 12.7 : 5"
                 :step="frameDimensionEdit.unit === 'cm' ? 0.1 : 0.25"
                 class="w-full px-2 py-1 bg-dark-100 border border-gray-600 rounded text-sm"

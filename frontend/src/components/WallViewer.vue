@@ -490,14 +490,16 @@ const updateFrames = () => {
     const frameWidth = dims.width * scale
     const frameHeight = dims.height * scale
     const frameDepth = (dims.depth || 2) * scale
-    const borderWidth = 0.02 // Frame border width in scene units
+    const hasFrameBorder = !!frame.styling?.frame_color
+    const thicknessInches = hasFrameBorder ? (frame.styling?.frame_thickness ?? 1) : 0
+    const borderWidth = thicknessInches * 2.54 * scale // inches → cm → scene units
 
     // Create a group to hold frame parts
     const frameGroup = new THREE.Group()
     frameGroup.userData = { frameId: frame.id ?? `picture_${frame.pictureId ?? originalIndex}`, placementIndex: originalIndex }
 
-    // Frame color
-    const frameColor = new THREE.Color(frame.styling?.frame_color || '#8B4513')
+    // Frame color (null frame_color means no physical frame border)
+    const frameColor = hasFrameBorder ? new THREE.Color(frame.styling.frame_color) : null
 
     // Create the picture plane (image in center)
     const pictureWidth = frameWidth - borderWidth * 2
@@ -531,29 +533,31 @@ const updateFrames = () => {
     frameGroup.add(pictureMesh)
 
     // Create frame border (4 boxes around the picture)
-    const frameMaterial = new THREE.MeshStandardMaterial({ color: frameColor })
+    const frameMaterial = frameColor ? new THREE.MeshStandardMaterial({ color: frameColor }) : null
 
-    // Top border
-    const topGeom = new THREE.BoxGeometry(frameWidth, borderWidth, frameDepth)
-    const topBorder = new THREE.Mesh(topGeom, frameMaterial)
-    topBorder.position.set(0, frameHeight / 2 - borderWidth / 2, 0)
-    frameGroup.add(topBorder)
+    if (borderWidth > 0 && frameMaterial) {
+      // Top border
+      const topGeom = new THREE.BoxGeometry(frameWidth, borderWidth, frameDepth)
+      const topBorder = new THREE.Mesh(topGeom, frameMaterial)
+      topBorder.position.set(0, frameHeight / 2 - borderWidth / 2, 0)
+      frameGroup.add(topBorder)
 
-    // Bottom border
-    const bottomBorder = new THREE.Mesh(topGeom.clone(), frameMaterial)
-    bottomBorder.position.set(0, -frameHeight / 2 + borderWidth / 2, 0)
-    frameGroup.add(bottomBorder)
+      // Bottom border
+      const bottomBorder = new THREE.Mesh(topGeom.clone(), frameMaterial)
+      bottomBorder.position.set(0, -frameHeight / 2 + borderWidth / 2, 0)
+      frameGroup.add(bottomBorder)
 
-    // Left border
-    const sideGeom = new THREE.BoxGeometry(borderWidth, frameHeight - borderWidth * 2, frameDepth)
-    const leftBorder = new THREE.Mesh(sideGeom, frameMaterial)
-    leftBorder.position.set(-frameWidth / 2 + borderWidth / 2, 0, 0)
-    frameGroup.add(leftBorder)
+      // Left border
+      const sideGeom = new THREE.BoxGeometry(borderWidth, frameHeight - borderWidth * 2, frameDepth)
+      const leftBorder = new THREE.Mesh(sideGeom, frameMaterial)
+      leftBorder.position.set(-frameWidth / 2 + borderWidth / 2, 0, 0)
+      frameGroup.add(leftBorder)
 
-    // Right border
-    const rightBorder = new THREE.Mesh(sideGeom.clone(), frameMaterial)
-    rightBorder.position.set(frameWidth / 2 - borderWidth / 2, 0, 0)
-    frameGroup.add(rightBorder)
+      // Right border
+      const rightBorder = new THREE.Mesh(sideGeom.clone(), frameMaterial)
+      rightBorder.position.set(frameWidth / 2 - borderWidth / 2, 0, 0)
+      frameGroup.add(rightBorder)
+    }
 
     // Back panel
     const backGeom = new THREE.PlaneGeometry(frameWidth, frameHeight)
