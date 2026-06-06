@@ -155,7 +155,14 @@ const savePicture = async () => {
     }
   } catch (err) {
     const d = err.response?.data
-    const msg = d?.error || (typeof d?.detail === 'string' ? d.detail : null)
+    let msg = d?.error || null
+    if (!msg && d?.detail) {
+      msg = typeof d.detail === 'string'
+        ? d.detail
+        : Array.isArray(d.detail)
+          ? d.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ')
+          : null
+    }
     error.value = msg || 'Failed to save frame'
   } finally {
     loading.value = false
