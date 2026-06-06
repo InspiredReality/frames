@@ -78,6 +78,7 @@ const onCapture = (data) => {
 }
 
 const onCameraError = (message) => {
+  if (message === 'camera-permission-denied') return // handled inline by CameraCapture
   error.value = message
 }
 
