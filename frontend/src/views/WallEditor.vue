@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WallViewer from '@/components/WallViewer.vue'
-import FramePreview2D from '@/components/FramePreview2D.vue'
+import FramePreview from '@/components/FramePreview.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
@@ -1279,15 +1279,12 @@ const getFrameDimensions = (frame) => {
         </div>
 
         <!-- Frame Preview -->
-        <div class="flex justify-center mb-4 bg-dark-300 rounded-lg p-4">
-          <FramePreview2D
+        <div class="mb-4">
+          <FramePreview
             :imageUrl="getImageUrl(selectedPicture?.image_path || selectedFrame.pictureImage)"
-            :widthCm="getFrameDimensions(selectedFrame).widthCm"
-            :heightCm="getFrameDimensions(selectedFrame).heightCm"
+            :dimensions="{ width: getFrameDimensions(selectedFrame).widthCm, height: getFrameDimensions(selectedFrame).heightCm, depth: 2.54 }"
             :frameColor="getFrameDimensions(selectedFrame).frameColor"
             :frameThickness="getFrameDimensions(selectedFrame).frameThickness"
-            :maxWidth="300"
-            :maxHeight="300"
           />
         </div>
 
