@@ -153,7 +153,9 @@ const savePicture = async () => {
       router.push('/public-gallery')
     }
   } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to save frame'
+    const d = err.response?.data
+    const msg = d?.error || (typeof d?.detail === 'string' ? d.detail : null)
+    error.value = msg || 'Failed to save frame'
   } finally {
     loading.value = false
   }
