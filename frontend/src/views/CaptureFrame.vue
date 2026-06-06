@@ -344,8 +344,8 @@ const savePicture = async () => {
           />
         </div>
 
-        <!-- Frame Thickness -->
-        <div class="mb-6">
+        <!-- Frame Thickness (hidden when no frame color selected) -->
+        <div v-if="frameColor" class="mb-6">
           <label class="block text-sm text-gray-400 mb-1">Frame Thickness (inches)</label>
           <input
             v-model.number="frameThickness"
@@ -364,7 +364,7 @@ const savePicture = async () => {
             <button
               v-for="preset in presetColors"
               :key="String(preset.value)"
-              @click="frameColor = preset.value; showColorPicker = false"
+              @click="frameColor = preset.value; showColorPicker = false; if (!preset.value) frameThickness = 0"
               class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition"
               :class="frameColor === preset.value && !showColorPicker ? 'border-primary-500' : 'border-gray-600 hover:border-gray-500'"
             >

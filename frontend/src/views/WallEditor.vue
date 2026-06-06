@@ -140,7 +140,7 @@ const allFrames = computed(() => {
         pictureName: picture.name,
         pictureImage: picture.thumbnail_path || picture.image_path,
         dimensions: { cm: { width: 20, height: 25, depth: 2 } },
-        styling: { frame_color: '#8B4513', frame_thickness: 1 },
+        styling: { frame_color: null, frame_thickness: 0 },
         isPublic
       })
     }
