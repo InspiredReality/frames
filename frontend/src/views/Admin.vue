@@ -145,7 +145,7 @@ function shortId(sessionId) {
       <!-- Stats bar -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div class="bg-dark-200 rounded-lg p-4 text-center">
-          <p class="text-3xl font-bold text-primary-400">{{ users.length }}</p>
+          <p class="text-3xl font-bold text-primary-400">{{ users.filter(u => !u.is_guest).length }}</p>
           <p class="text-sm text-gray-400 mt-1">Registered Users</p>
         </div>
         <div class="bg-dark-200 rounded-lg p-4 text-center">
@@ -182,6 +182,7 @@ function shortId(sessionId) {
               <div class="flex items-center gap-2">
                 <span class="font-medium text-white truncate">{{ user.username }}</span>
                 <span v-if="user.is_admin" class="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded">Admin</span>
+                <span v-if="user.is_guest" class="text-xs bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded">Guest</span>
               </div>
               <p class="text-xs text-gray-400 truncate">{{ user.email }}</p>
             </div>
