@@ -174,17 +174,20 @@ function shortId(sessionId) {
             class="w-full flex items-center gap-3 px-4 py-3 hover:bg-dark-300 transition text-left"
             @click="toggleUser(user.id)"
           >
-            <div class="w-9 h-9 rounded-full bg-primary-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              {{ user.username[0].toUpperCase() }}
+            <div
+              class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+              :class="user.is_guest ? 'bg-gray-600' : 'bg-primary-700'"
+            >
+              {{ user.is_guest ? '?' : user.username[0].toUpperCase() }}
             </div>
 
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="font-medium text-white truncate">{{ user.username }}</span>
+                <span class="font-medium text-white truncate">{{ user.is_guest ? 'Unauth' : user.username }}</span>
                 <span v-if="user.is_admin" class="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded">Admin</span>
                 <span v-if="user.is_guest" class="text-xs bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded">Guest</span>
               </div>
-              <p class="text-xs text-gray-400 truncate">{{ user.email }}</p>
+              <p class="text-xs text-gray-400 truncate">{{ user.is_guest ? 'Unauthenticated users' : user.email }}</p>
             </div>
 
             <div class="hidden sm:flex items-center gap-6 text-sm text-gray-400 flex-shrink-0">
@@ -196,7 +199,7 @@ function shortId(sessionId) {
                 <p class="font-semibold text-white">{{ user.frame_count }}</p>
                 <p class="text-xs">Frames</p>
               </div>
-              <div class="text-right">
+              <div v-if="!user.is_guest" class="text-right">
                 <p class="text-xs text-gray-500">Last login</p>
                 <p class="text-xs">{{ formatDateTime(user.last_login) }}</p>
               </div>
@@ -211,9 +214,10 @@ function shortId(sessionId) {
           <div v-if="expandedUserId === user.id" class="bg-dark-300 px-4 pb-4 pt-2">
             <div class="flex gap-4 mb-3 sm:hidden text-sm text-gray-400">
               <span>{{ user.wall_count }} walls · {{ user.frame_count }} frames</span>
-              <span>· Last login: {{ formatDateTime(user.last_login) }}</span>
+              <span v-if="!user.is_guest">· Last login: {{ formatDateTime(user.last_login) }}</span>
             </div>
-            <p class="text-xs text-gray-500 mb-3">Member since {{ formatDate(user.created_at) }}</p>
+            <p v-if="!user.is_guest" class="text-xs text-gray-500 mb-3">Member since {{ formatDate(user.created_at) }}</p>
+            <p v-else class="text-xs text-gray-500 mb-3">All walls and frames created by unauthenticated visitors</p>
 
             <div v-if="loadingDetail === user.id" class="text-gray-400 text-sm py-4 text-center">Loading…</div>
 
