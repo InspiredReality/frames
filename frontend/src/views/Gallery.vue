@@ -16,7 +16,7 @@ const loading = ref(true)
 const selectedFrame = ref(null)
 const selectedWall = ref(null)
 const activeTab = ref('all') // 'all', 'walls', 'frames'
-const visibilityFilter = ref('all') // 'private', 'public', 'all'
+const visibilityFilter = ref('private') // 'private', 'public', 'all'
 const assigningWall = ref(false)
 
 // Dimension editing state
