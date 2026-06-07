@@ -7,6 +7,7 @@ import QrCodeCard from '@/components/QrCodeCard.vue'
 import WallViewer from '@/components/WallViewer.vue'
 import { useWallsStore } from '@/store/walls'
 import { useAuthStore } from '@/store/auth'
+import { logGuestEvent } from '@/utils/guestSession'
 
 const router = useRouter()
 const wallsStore = useWallsStore()
@@ -546,6 +547,7 @@ const saveWall = async () => {
       height_cm: getHeightInCm()
     }, bgColor)
 
+    logGuestEvent(authStore.isAuthenticated, 'wall_created', { wall_id: savedWall.id, wall_name: savedWall.name })
     router.push(authStore.isAuthenticated ? '/gallery' : `/wall/${savedWall.id}`)
   } catch (err) {
     error.value = err.response?.data?.error || 'Failed to save wall'

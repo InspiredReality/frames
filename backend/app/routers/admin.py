@@ -1,4 +1,5 @@
 """Admin-only endpoints for user management and content moderation."""
+from collections import defaultdict
 from typing import List
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.core.settings import settings
 from app.models import User, Wall, Picture
+from app.models.guest_event import GuestEvent
 from app.routers.auth import get_admin_user
 from app.utils.uploads import _safe_unlink  # reuse existing helper if available
 
@@ -81,3 +83,49 @@ def get_user_detail(
         "walls": [w.to_dict(include_placements=False) for w in walls],
         "frames": [p.to_dict(include_frames=False) for p in pictures],
     }
+
+
+# ----------------------------
+# Guest sessions
+# ----------------------------
+
+@router.get("/guest-sessions", status_code=200)
+def list_guest_sessions(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+):
+    """Return all anonymous sessions with their event timelines, newest first."""
+    events = (
+        db.query(GuestEvent)
+        .order_by(GuestEvent.session_id, GuestEvent.created_at)
+        .all()
+    )
+
+    sessions_map = defaultdict(lambda: {"events": [], "first_seen": None, "last_seen": None})
+    for ev in events:
+        s = sessions_map[ev.session_id]
+        s["events"].append({
+            "action": ev.action,
+            "metadata": ev.metadata,
+            "created_at": ev.created_at.isoformat() if ev.created_at else None,
+        })
+        if s["first_seen"] is None or ev.created_at < s["first_seen"]:
+            s["first_seen"] = ev.created_at
+        if s["last_seen"] is None or ev.created_at > s["last_seen"]:
+            s["last_seen"] = ev.created_at
+
+    sessions = []
+    for sid, data in sessions_map.items():
+        counts = defaultdict(int)
+        for ev in data["events"]:
+            counts[ev["action"]] += 1
+        sessions.append({
+            "session_id": sid,
+            "first_seen": data["first_seen"].isoformat() if data["first_seen"] else None,
+            "last_seen": data["last_seen"].isoformat() if data["last_seen"] else None,
+            "event_counts": dict(counts),
+            "events": data["events"],
+        })
+
+    sessions.sort(key=lambda s: s["last_seen"] or "", reverse=True)
+    return {"sessions": sessions}

@@ -11,7 +11,7 @@ from app.core.settings import settings
 from app.db import engine, Base, get_db
 
 # Import models so they register with Base.metadata
-from app.models import User, Wall, Picture, PictureFrame, Tag, reality_tags, Reality, OrgOb  # noqa: F401
+from app.models import User, Wall, Picture, PictureFrame, Tag, reality_tags, Reality, OrgOb, GuestEvent  # noqa: F401
 
 # Routers
 from app.routers.auth import router as auth_router
@@ -22,6 +22,7 @@ from app.routers.realities import router as realities_router
 from app.routers.org_obs import router as org_obs_router
 from app.routers.tags import router as tags_router
 from app.routers.admin import router as admin_router
+from app.routers.guest_events import router as guest_events_router
 
 
 def create_app() -> FastAPI:
@@ -86,6 +87,21 @@ def create_app() -> FastAPI:
             conn.commit()
         except Exception:
             conn.rollback()
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS guest_events (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(36) NOT NULL,
+                    action VARCHAR(50) NOT NULL,
+                    metadata JSON,
+                    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_guest_events_session_id ON guest_events(session_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_guest_events_created_at ON guest_events(created_at)"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     # Seed admin flag for emails listed in ADMIN_EMAILS env var (comma-separated)
     _admin_emails_env = os.getenv("ADMIN_EMAILS", "")
@@ -137,6 +153,7 @@ def create_app() -> FastAPI:
     app.include_router(org_obs_router, prefix="/api/org-obs", tags=["org-obs"])
     app.include_router(tags_router, prefix="/api/tags", tags=["tags"])
     app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+    app.include_router(guest_events_router, prefix="/api/guest-events", tags=["guest-events"])
 
     # -------------------
     # Root + health + status
