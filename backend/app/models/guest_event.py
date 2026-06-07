@@ -11,7 +11,7 @@ class GuestEvent(Base):
     id = Column(Integer, primary_key=True)
     session_id = Column(String(36), nullable=False)
     action = Column(String(50), nullable=False)
-    event_data = Column(JSON, nullable=True)
+    event_metadata = Column("metadata", JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (
