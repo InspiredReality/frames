@@ -51,7 +51,7 @@ def log_guest_event(
     event = GuestEvent(
         session_id=payload.session_id,
         action=payload.action,
-        metadata=payload.metadata,
+        event_data=payload.metadata,
         created_at=datetime.utcnow(),
     )
     db.add(event)

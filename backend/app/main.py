@@ -93,7 +93,7 @@ def create_app() -> FastAPI:
                     id SERIAL PRIMARY KEY,
                     session_id VARCHAR(36) NOT NULL,
                     action VARCHAR(50) NOT NULL,
-                    metadata JSON,
+                    event_data JSON,
                     created_at TIMESTAMP DEFAULT NOW() NOT NULL
                 )
             """))

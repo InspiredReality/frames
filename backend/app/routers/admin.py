@@ -106,7 +106,7 @@ def list_guest_sessions(
         s = sessions_map[ev.session_id]
         s["events"].append({
             "action": ev.action,
-            "metadata": ev.metadata,
+            "metadata": ev.event_data,
             "created_at": ev.created_at.isoformat() if ev.created_at else None,
         })
         if s["first_seen"] is None or ev.created_at < s["first_seen"]:
