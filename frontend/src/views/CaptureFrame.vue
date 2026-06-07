@@ -10,6 +10,7 @@ import { usePicturesStore } from '@/store/pictures'
 import { useWallsStore } from '@/store/walls'
 import { useAuthStore } from '@/store/auth'
 import { getUploadUrl } from '@/services/api'
+import { logGuestEvent } from '@/utils/guestSession'
 
 const router = useRouter()
 const picturesStore = usePicturesStore()
@@ -146,6 +147,7 @@ const savePicture = async () => {
       })
     }
 
+    logGuestEvent(authStore.isAuthenticated, 'frame_created', { frame_id: frame?.id, frame_name: pictureName.value, wall_id: selectedWallId.value || null })
     if (authStore.isAuthenticated) {
       router.push('/gallery')
     } else if (selectedWallId.value) {

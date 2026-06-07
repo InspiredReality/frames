@@ -2,13 +2,14 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WallViewer from '@/components/WallViewer.vue'
-import FramePreview2D from '@/components/FramePreview2D.vue'
+import FramePreview from '@/components/FramePreview.vue'
 import ImageCropper from '@/components/ImageCropper.vue'
 import { useWallsStore } from '@/store/walls'
 import { usePicturesStore } from '@/store/pictures'
 import { useAuthStore } from '@/store/auth'
 import { getUploadUrl } from '@/services/api'
 import api from '@/services/api'
+import { logGuestEvent } from '@/utils/guestSession'
 
 const route = useRoute()
 const router = useRouter()
@@ -194,6 +195,7 @@ const addFrame = async (frame) => {
       ? { picture_id: frame.pictureId, position: { x: 0, y: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1.0 }
       : { frame_id: frame.id, position: { x: 0, y: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1.0 }
     await wallsStore.addFramePlacement(wall.value.id, placement)
+    logGuestEvent(authStore.isAuthenticated, 'frame_added_to_wall', { wall_id: wall.value.id, frame_id: frame.id || null, picture_id: frame.pictureId || null })
     showFramePicker.value = false
   } catch (err) {
     error.value = 'Failed to add frame'
@@ -256,6 +258,7 @@ const saveLayout = async () => {
     })
     const scene_config = { ...(wall.value.scene_config || {}), layouts }
     await wallsStore.updateWall(wall.value.id, { scene_config })
+    logGuestEvent(authStore.isAuthenticated, 'layout_saved', { wall_id: wall.value.id, layout_name: layoutName.value.trim() || null })
   } catch (err) {
     error.value = 'Failed to save layout'
   } finally {
@@ -494,6 +497,7 @@ const onFrameMoved = async (data) => {
       }
     }
     await wallsStore.updateWall(wall.value.id, { frame_placements: placements })
+    logGuestEvent(authStore.isAuthenticated, 'frame_rearranged', { wall_id: wall.value.id })
   } catch (err) {
     console.error('Failed to save frame position:', err)
     error.value = 'Failed to save frame position'
@@ -1279,15 +1283,12 @@ const getFrameDimensions = (frame) => {
         </div>
 
         <!-- Frame Preview -->
-        <div class="flex justify-center mb-4 bg-dark-300 rounded-lg p-4">
-          <FramePreview2D
+        <div class="mb-4">
+          <FramePreview
             :imageUrl="getImageUrl(selectedPicture?.image_path || selectedFrame.pictureImage)"
-            :widthCm="getFrameDimensions(selectedFrame).widthCm"
-            :heightCm="getFrameDimensions(selectedFrame).heightCm"
+            :dimensions="{ width: getFrameDimensions(selectedFrame).widthCm, height: getFrameDimensions(selectedFrame).heightCm, depth: 2.54 }"
             :frameColor="getFrameDimensions(selectedFrame).frameColor"
             :frameThickness="getFrameDimensions(selectedFrame).frameThickness"
-            :maxWidth="300"
-            :maxHeight="300"
           />
         </div>
 
