@@ -35,10 +35,9 @@ def list_users(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_admin_user),
 ):
-    """List all non-guest users with wall/frame counts and last login."""
+    """List all users (including guest) with wall/frame counts and last login."""
     users = (
         db.query(User)
-        .filter(User.email != GUEST_USER_EMAIL)
         .order_by(User.created_at.desc())
         .all()
     )
@@ -49,6 +48,7 @@ def list_users(
         data = u.to_dict()
         data["wall_count"] = wall_count
         data["frame_count"] = frame_count
+        data["is_guest"] = (u.email == GUEST_USER_EMAIL)
         result.append(data)
     return {"users": result}
 
