@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.settings import settings
 from app.db import get_db
 from app.models import Wall, User
-from app.routers.auth import get_current_user, get_optional_current_user, get_guest_user
+from app.routers.auth import get_current_user, get_optional_current_user, get_guest_user, get_admin_user
 from app.services.image_processor import process_wall_image
 
 router = APIRouter()
@@ -296,11 +296,14 @@ def delete_wall(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    wall = (
-        db.query(Wall)
-        .filter(Wall.id == wall_id, Wall.user_id == current_user.id)
-        .first()
-    )
+    if current_user.is_admin:
+        wall = db.query(Wall).filter(Wall.id == wall_id).first()
+    else:
+        wall = (
+            db.query(Wall)
+            .filter(Wall.id == wall_id, Wall.user_id == current_user.id)
+            .first()
+        )
     if not wall:
         raise HTTPException(status_code=404, detail="Wall not found")
 

@@ -1,6 +1,6 @@
 """User model."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -16,6 +16,8 @@ class User(Base):
     email = Column(String(120), unique=True, nullable=False, index=True)
     username = Column(String(80), unique=True, nullable=False)
     password_hash = Column(String(256), nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
+    last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -37,6 +39,8 @@ class User(Base):
             'id': self.id,
             'email': self.email,
             'username': self.username,
+            'is_admin': self.is_admin if self.is_admin is not None else False,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

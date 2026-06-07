@@ -73,6 +73,12 @@ const routes = [
     name: 'org-levels',
     component: () => import('@/views/OrgLevels.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin',
+    name: 'admin',
+    component: () => import('@/views/Admin.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

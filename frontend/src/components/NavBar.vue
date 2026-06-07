@@ -41,6 +41,9 @@ const logout = () => {
             <router-link to="/realities" class="text-gray-300 hover:text-white transition">
               Enter Realities
             </router-link>
+            <router-link v-if="authStore.user?.is_admin" to="/admin" class="text-yellow-400 hover:text-yellow-300 transition font-medium">
+              Admin
+            </router-link>
             <button @click="logout" class="btn btn-secondary">
               Logout
             </button>
@@ -87,6 +90,9 @@ const logout = () => {
           </router-link>
           <router-link to="/realities" class="block py-2 text-gray-300 hover:text-white" @click="menuOpen = false">
             Enter Realities
+          </router-link>
+          <router-link v-if="authStore.user?.is_admin" to="/admin" class="block py-2 text-yellow-400 hover:text-yellow-300 font-medium" @click="menuOpen = false">
+            Admin
           </router-link>
           <button @click="logout" class="block w-full text-left py-2 text-gray-300 hover:text-white">
             Logout

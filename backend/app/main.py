@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, Request
@@ -20,6 +21,7 @@ from app.routers.models3d import router as models3d_router
 from app.routers.realities import router as realities_router
 from app.routers.org_obs import router as org_obs_router
 from app.routers.tags import router as tags_router
+from app.routers.admin import router as admin_router
 
 
 def create_app() -> FastAPI:
@@ -74,6 +76,29 @@ def create_app() -> FastAPI:
             conn.commit()
         except Exception:
             conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN last_login TIMESTAMP"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+    # Seed admin flag for emails listed in ADMIN_EMAILS env var (comma-separated)
+    _admin_emails_env = os.getenv("ADMIN_EMAILS", "")
+    if _admin_emails_env.strip():
+        from app.db import SessionLocal
+        _admin_emails = [e.strip().lower() for e in _admin_emails_env.split(",") if e.strip()]
+        with SessionLocal() as _db:
+            from app.models import User as _User
+            for _email in _admin_emails:
+                _u = _db.query(_User).filter(_User.email == _email).first()
+                if _u and not _u.is_admin:
+                    _u.is_admin = True
+            _db.commit()
 
     # -------------------
     # CORS
@@ -111,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(realities_router, prefix="/api/realities", tags=["realities"])
     app.include_router(org_obs_router, prefix="/api/org-obs", tags=["org-obs"])
     app.include_router(tags_router, prefix="/api/tags", tags=["tags"])
+    app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 
     # -------------------
     # Root + health + status

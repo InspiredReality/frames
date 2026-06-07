@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.settings import settings
 from app.db import get_db
 from app.models import Picture, PictureFrame, User
-from app.routers.auth import get_current_user, get_optional_current_user, get_guest_user
+from app.routers.auth import get_current_user, get_optional_current_user, get_guest_user, get_admin_user
 from app.services.image_processor import process_picture_image
 from app.services.model_generator import generate_frame_model
 from app.utils.uploads import make_safe_filename, save_upload_with_limit, verify_image_file
@@ -277,11 +277,14 @@ def delete_picture(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    picture = (
-        db.query(Picture)
-        .filter(Picture.id == picture_id, Picture.user_id == current_user.id)
-        .first()
-    )
+    if current_user.is_admin:
+        picture = db.query(Picture).filter(Picture.id == picture_id).first()
+    else:
+        picture = (
+            db.query(Picture)
+            .filter(Picture.id == picture_id, Picture.user_id == current_user.id)
+            .first()
+        )
     if not picture:
         raise HTTPException(status_code=404, detail="Picture not found")
 

@@ -117,6 +117,12 @@ def get_current_user(
     return user
 
 
+def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+
 # ----------------------------
 # Schemas
 # ----------------------------
@@ -193,6 +199,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.check_password(payload.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    user.last_login = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
 
     token = create_access_token(user.id)
 
