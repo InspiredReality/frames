@@ -11,7 +11,6 @@ from app.core.settings import settings
 from app.models import User, Wall, Picture
 from app.models.guest_event import GuestEvent
 from app.routers.auth import get_admin_user
-from app.utils.uploads import _safe_unlink  # reuse existing helper if available
 
 router = APIRouter()
 
